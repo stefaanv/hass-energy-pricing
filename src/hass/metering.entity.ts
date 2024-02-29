@@ -1,7 +1,7 @@
 import { EntitySchema } from '@mikro-orm/mariadb'
 import { BaseEntity, IBaseEntity } from '@src/base.entity'
 
-export const PriceEntity = new EntitySchema<MeteringResume, IBaseEntity>({
+export const MeteringEntity = new EntitySchema<MeteringResume, IBaseEntity>({
   name: 'metering',
   extends: BaseEntity,
   properties: {

@@ -8,6 +8,7 @@ import { listify, mapValues } from '@bruyland/utilities'
 import { EntityManager } from '@mikro-orm/mariadb'
 import { Cron } from '@nestjs/schedule'
 import { HassStateResponse } from './hass-state.model'
+import { MeteringEntity } from './metering.entity'
 
 type MeterValueKey = keyof Omit<MeterValues, 'timestamp'>
 const ENERGY_ENTITIES: Record<MeterValueKey, string> = {
@@ -43,7 +44,6 @@ export class EnergyService {
         Authorization: `Bearer ${bearer}`,
       },
     })
-    const meterValues = this.getMeasurements()
   }
 
   @Cron('0 * * * * *')
@@ -65,7 +65,7 @@ export class EnergyService {
     if (this.lastMeterValues) {
       const resume = this.makeResume(meterValues, this.lastMeterValues)
       this.printMeteringResume(resume)
-      //TODO metingen opslaan in DB !
+      this._em.fork().insert(MeteringEntity, resume)
     }
     this.lastMeterValues = meterValues
   }

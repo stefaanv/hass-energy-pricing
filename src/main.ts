@@ -21,14 +21,14 @@ async function bootstrap() {
   // prices.slice(-2).forEach(p => pricingServ.printPrice(p))
 
   // db tabellen aanpassen
-  // await createSchema(app)
+  // await updateSchema(app)
 }
 bootstrap()
 
-async function createSchema(app: INestApplication) {
+async function updateSchema(app: INestApplication) {
   const orm = app.get(MikroORM)
   const generator = orm.schema
   // const createDump = await generator.getUpdateSchemaSQL()
   // console.log(createDump)
-  await generator.createSchema()
+  await generator.updateSchema()
 }
