@@ -1,18 +1,16 @@
 import { EntitySchema } from '@mikro-orm/mariadb'
-import { BaseEntity, IBaseEntity } from '@src/base.entity'
 import { PriceDetail } from './spot-result.model'
 
-export const PriceEntity = new EntitySchema<PriceDetail, IBaseEntity>({
+export const PriceEntity = new EntitySchema<PriceDetail>({
   name: 'price',
-  extends: BaseEntity,
   properties: {
-    from: { type: Date },
+    from: { type: Date, primary: true },
     till: { type: Date },
     index: { type: 'float' },
-    energie: { type: 'float' },
-    injectie: { type: 'float' },
-    andereTotaalDag: { type: 'float' },
-    andereTotaalNacht: { type: 'float' },
-    andereDetail: { type: 'json' },
+    consumption: { type: 'float' },
+    injection: { type: 'float' },
+    otherTotalPeak: { type: 'float' },
+    otherTotalOffPeak: { type: 'float' },
+    otherDetails: { type: 'json' },
   },
 })

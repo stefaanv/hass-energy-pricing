@@ -8,18 +8,19 @@ import { MikroOrmModule } from '@mikro-orm/nestjs'
 import { MariaDbDriver } from '@mikro-orm/mariadb'
 import { EntityCaseNamingStrategy } from '@mikro-orm/core'
 import { ScheduleModule } from '@nestjs/schedule'
-import { EnergyService } from './hass/energy.service'
+import { MeteringService } from './hass/metering.service'
+import dbConfig from './mikro-orm.config'
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       load: [config],
     }),
-    MikroOrmModule.forRoot(mikroOrmConfigFactory()),
+    MikroOrmModule.forRoot(dbConfig),
     ScheduleModule.forRoot(),
   ],
   controllers: [AppController],
-  providers: [AppService, PricingService, EnergyService],
+  providers: [AppService, PricingService, MeteringService],
 })
 export class AppModule {}
 

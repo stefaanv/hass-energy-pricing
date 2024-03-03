@@ -17,10 +17,10 @@ export default () => ({
     bearerToken: process.env.HASS_AUTH_TOKEN,
   },
   database: {
-    host: '192.168.0.2',
-    user: 'hass-energy-pricing',
+    host: '192.168.0.3',
+    user: 'homeassistant',
     password: process.env.DB_PASSWORD,
-    dbName: 'energie',
+    dbName: 'energy',
   },
   pricing: {
     energie: /** in c€/kWh */ (index: number) => 0.204 + index / 10,

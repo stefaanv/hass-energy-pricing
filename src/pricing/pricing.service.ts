@@ -20,12 +20,22 @@ export class PricingService {
   ) {
     this._log = new Logger(PricingService.name)
     // Wait 5 seconds to allow DB stuff to be handled in bootstrap()
-    setTimeout(() => this.addLatestPricesToDb(), 5000)
+    setTimeout(() => this.addLatestPricesToDb(), 2000)
+  }
+
+  async getPrices(time: Date) {
+    const em = this._em.fork()
+    const current = await this._em.findOne(
+      PriceEntity,
+      { from: { $lte: time } },
+      { orderBy: [{ from: -1 }] },
+    )
+    return current as PriceDetail
   }
 
   @Cron('0 10 14-18 * * *')
   async addLatestPricesToDb() {
-    const prices = await this.getPricingData()
+    const prices = await this.loadPricingData()
     const em = this._em.fork()
     const lastPriceInDb = await em.find(PriceEntity, {}, { orderBy: [{ till: -1 }], limit: 1 })
     const lastKnown = lastPriceInDb.length > 0 ? lastPriceInDb[0].till : new Date(1970)
@@ -37,7 +47,7 @@ export class PricingService {
     }
   }
 
-  async getPricingData(): Promise<PriceDetail[]> {
+  async loadPricingData(): Promise<PriceDetail[]> {
     // try get the index data from the internet + handle errors
     const belpexSpotConfig = this._config.get<object>('belpexSpot')
     const uri = axios.getUri(belpexSpotConfig)
@@ -71,11 +81,11 @@ export class PricingService {
       index,
       from: startTime,
       till: endTime,
-      energie: consumptionFormula!(index),
-      injectie: injectionFormula!(index),
-      andereDetail: otherPricingInfo,
-      andereTotaalDag: andereTotaal + otherPricingInfo['distributie-dag'],
-      andereTotaalNacht: andereTotaal + otherPricingInfo['distributie-nacht'],
+      consumption: consumptionFormula!(index),
+      injection: injectionFormula!(index),
+      otherDetails: otherPricingInfo,
+      otherTotalPeak: andereTotaal + otherPricingInfo['distributie-dag'],
+      otherTotalOffPeak: andereTotaal + otherPricingInfo['distributie-nacht'],
     } as PriceDetail
   }
 
@@ -83,9 +93,9 @@ export class PricingService {
     const dag = format(pd.from, 'd/MM')
     const start = format(pd.from, 'HH:mm')
     const end = format(pd.till, 'HH:mm')
-    const cons = pd.energie.toFixed(1)
-    const inj = pd.injectie.toFixed(1)
-    const andereTot = pd.andereTotaalDag.toFixed(1)
+    const cons = pd.consumption.toFixed(1)
+    const inj = pd.injection.toFixed(1)
+    const andereTot = pd.otherTotalPeak.toFixed(1)
     console.log(
       dag,
       start,

@@ -1,11 +1,9 @@
 import { EntitySchema } from '@mikro-orm/mariadb'
-import { BaseEntity, IBaseEntity } from '@src/base.entity'
 
-export const MeteringEntity = new EntitySchema<MeteringResume, IBaseEntity>({
+export const MeteringEntity = new EntitySchema<MeteringResume>({
   name: 'metering',
-  extends: BaseEntity,
   properties: {
-    from: { type: Date },
+    from: { type: Date, primary: true },
     till: { type: Date },
     consumption: { type: 'float' },
     injection: { type: 'float' },

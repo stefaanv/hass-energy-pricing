@@ -16,19 +16,14 @@ async function bootstrap() {
   const logger = new Logger('main')
   logger.log(`hass-energy-pricing started, listening to port ${port}`)
   //TODO te verplaatsen naar PricingService constructor
-  const pricingServ = app.get(PricingService)
-  const prices = await pricingServ.getPricingData()
-  // prices.slice(-2).forEach(p => pricingServ.printPrice(p))
-
-  // db tabellen aanpassen
-  // await updateSchema(app)
+  await updateSchema(app)
+  // const pricingServ = app.get(PricingService)
+  // const prices = await pricingServ.loadPricingData()
 }
 bootstrap()
 
 async function updateSchema(app: INestApplication) {
   const orm = app.get(MikroORM)
-  const generator = orm.schema
-  // const createDump = await generator.getUpdateSchemaSQL()
-  // console.log(createDump)
-  await generator.updateSchema()
+  const migrator = orm.getMigrator()
+  await migrator.up()
 }

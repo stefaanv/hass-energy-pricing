@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@bruyland/utilities": "^0.0.74",
+    "@mikro-orm/cli": "^6.1.6",
     "@mikro-orm/core": "^6.1.6",
     "@mikro-orm/mariadb": "^6.1.6",
     "@mikro-orm/migrations": "^6.1.6",
@@ -57,6 +58,13 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.3.3"
+  },
+  "mikro-orm": {
+    "useTsNode": true,
+    "configPaths": [
+      "./src/mikro-orm.config.ts",
+      "./dist/mikro-orm.config.js"
+    ]
   },
   "jest": {
     "moduleFileExtensions": [
