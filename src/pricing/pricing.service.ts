@@ -2,13 +2,17 @@ import { Injectable, Logger, LoggerService } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { DataPoint, PriceDetail, SpotResult } from './spot-result.model'
 import axios from 'axios'
-import { tryit } from 'radash'
+import { tryit } from '@bruyland/utilities'
 import { addHours, format, parseISO } from 'date-fns'
 import { utcToZonedTime } from 'date-fns-tz'
 import { listify } from '@bruyland/utilities'
 import { EntityManager } from '@mikro-orm/mariadb'
 import { PriceEntity } from './price.entity'
 import { Cron } from '@nestjs/schedule'
+
+// TODO: alleen de index waarden opslaan
+// TODO: berekeningsparameters in DB stoppen
+// TODO: funtie maken die prijs onmiddellijk berekent (uit index opgehaald uit DB)
 
 @Injectable()
 export class PricingService {

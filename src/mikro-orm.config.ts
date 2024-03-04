@@ -2,7 +2,6 @@ import 'dotenv/config'
 import { EntityCaseNamingStrategy, MariaDbDriver, Options } from '@mikro-orm/mariadb'
 import { Migrator, TSMigrationGenerator } from '@mikro-orm/migrations'
 import config from '@src/config'
-import { resolve } from 'path'
 
 const cfg = config()
 const dbCfg = cfg.database

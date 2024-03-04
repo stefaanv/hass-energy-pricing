@@ -2,7 +2,6 @@ import { ConsoleLogger, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { NestFactory } from '@nestjs/core'
 import { AppModule } from './app.module'
-import { PricingService } from './pricing/pricing.service'
 import { MikroORM } from '@mikro-orm/core'
 import { INestApplication } from '@nestjs/common'
 
@@ -15,10 +14,7 @@ async function bootstrap() {
   await app.listen(port)
   const logger = new Logger('main')
   logger.log(`hass-energy-pricing started, listening to port ${port}`)
-  //TODO te verplaatsen naar PricingService constructor
   await updateSchema(app)
-  // const pricingServ = app.get(PricingService)
-  // const prices = await pricingServ.loadPricingData()
 }
 bootstrap()
 

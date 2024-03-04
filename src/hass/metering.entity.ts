@@ -1,4 +1,5 @@
 import { EntitySchema } from '@mikro-orm/mariadb'
+import { MeteringResume } from './meter-values.model'
 
 export const MeteringEntity = new EntitySchema<MeteringResume>({
   name: 'metering',

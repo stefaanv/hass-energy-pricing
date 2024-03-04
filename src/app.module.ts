@@ -16,7 +16,7 @@ import dbConfig from './mikro-orm.config'
     ConfigModule.forRoot({
       load: [config],
     }),
-    MikroOrmModule.forRoot(dbConfig),
+    MikroOrmModule.forRoot({ ...dbConfig, forceUndefined: true }),
     ScheduleModule.forRoot(),
   ],
   controllers: [AppController],
