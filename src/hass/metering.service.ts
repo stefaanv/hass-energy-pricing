@@ -100,7 +100,6 @@ export class MeteringService {
             debugger
           }
           printMeteringResume(resume, this.prices, (msg: string) => this._log.log(msg))
-          this._log.verbose!(`starting a new metering period at ${format(now, 'HH:mm')}`)
           this.startQuarterMeterValues = meterValues
         }
       } catch (error) {
@@ -128,6 +127,8 @@ export class MeteringService {
       return lastGood
     }
 
+    if (state == 'unavailable') return lastGood // no error message in these cases - happens quite often
+
     const [error2, parsed] = tryit(() => parseFloat(state))()
     if (error2 || isNaN(parsed)) {
       const msg = `state values "${state}" for entity "${entityId}" can't be parsed, ${rlkv}`
@@ -141,20 +142,16 @@ export class MeteringService {
 function printMeteringResume(r: MeteringResume, p: PriceDetail, logFn: (msg: string) => void) {
   const andere = r.tariff === 'peak' ? p.otherTotalPeak : p.otherTotalOffPeak
   const totaal = andere + p.consumption
-  const p1 = `metering ${format(r.from, 'HH:mm')} -> ${format(r.till, 'HH:mm')}  `
-  const p2 = `cons ${(r.consumption * 1000).toFixed(0)}Wh @ ${totaal.toFixed(1)}c€/kWh, `
-  const p3 =
-    r.injection > 0.001
-      ? `inj ${(r.injection * 1000).toFixed(0)}Wh,  @ ${p.injection.toFixed(1)}c€/kWh, `
-      : ''
-  const p4 =
-    (r.batCharge > 0.001 || r.batDischarge > 0
-      ? `bCh ${(r.batCharge * 1000).toFixed(0)}Wh, bDis ${(r.batDischarge * 1000).toFixed(0)}Wh, `
-      : '') + +(r.gas > 0 ? `gas ${r.gas.toFixed(0)}, ${r.tariff}` : '')
-  logFn('p1: ' + p1)
-  logFn('p2: ' + p2)
-  logFn('p3: ' + p3)
-  logFn('p4: ' + p4)
+  const msg =
+    `metering ${format(r.from, 'HH:mm')} -> ${format(r.till, 'HH:mm')}  ` +
+    `cons ${(r.consumption * 1000).toFixed(0)}Wh @ ${totaal.toFixed(1)}c€/kWh, ` +
+    (r.injection > 0.001
+      ? `inj ${(r.injection * 1000).toFixed(0)}Wh @ ${p.injection.toFixed(1)}c€/kWh, `
+      : '') +
+    (r.batCharge > 0.001 || r.batDischarge > 0.001
+      ? `batCh ${(r.batCharge * 1000).toFixed(0)}Wh, batDis ${(r.batDischarge * 1000).toFixed(0)}Wh, `
+      : '')
+  logFn(msg)
 }
 
 async function makeResume(

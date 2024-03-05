@@ -1,9 +1,19 @@
-import { Migration } from '@mikro-orm/migrations';
+import { Migration } from '@mikro-orm/migrations'
 
 export class Migration20240303121757 extends Migration {
-
   async up(): Promise<void> {
-    this.addSql('create table `metering-snapshots` (`timestamp` datetime not null, `consPeak` float not null, `consOffPeak` float not null, `injPeak` float not null, `injOffPeak` float not null, `batCharge` float not null, `batDischarge` float not null, `gas` float not null, primary key (`timestamp`)) default character set utf8mb4 engine = InnoDB;');
+    this.addSql(`set names utf8mb4;`)
+    this.addSql(
+      `CREATE TABLE "metering"  (
+        "from" datetime NOT NULL PRIMARY KEY,
+        "till" datetime NOT NULL,
+        "consumption" float NOT NULL,
+        "injection" float NOT NULL,
+        "batCharge" float NOT NULL,
+        "batDischarge" float NOT NULL,
+        "gas" float NOT NULL,
+        "tariff" enum('peak','off-peak') NOT NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;`.replaceAll(/"/g, '`'),
+    )
   }
-
 }

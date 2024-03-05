@@ -5,10 +5,11 @@ import axios from 'axios'
 import { tryit } from '@bruyland/utilities'
 import { addHours, format, parseISO } from 'date-fns'
 import { utcToZonedTime } from 'date-fns-tz'
-import { listify } from '@bruyland/utilities'
+import { listify, mapValues } from '@bruyland/utilities'
 import { EntityManager } from '@mikro-orm/mariadb'
 import { PriceEntity } from './price.entity'
 import { Cron } from '@nestjs/schedule'
+import { PriceFormula, PriceFormulaParameterSet } from './price-calculation.model'
 
 // TODO: alleen de index waarden opslaan
 // TODO: berekeningsparameters in DB stoppen
@@ -105,5 +106,21 @@ export class PricingService {
       start,
       `${start} -> ${end} : i=${pd.index.toFixed(1)}, e=${cons}, ad=${andereTot}, i=${inj}`,
     )
+  }
+}
+
+// TODO: volledige prijzformule peak of off-peak maken en beide eigen DB kolom steken
+function priceDetailFromIndex(index: number, formulas: PriceFormula) {}
+
+function priceCalc(
+  index: number,
+  formula: PriceFormulaParameterSet,
+  tariff?: 'peak' | 'off-peak',
+): number {
+  if ('slope' in formula) {
+    return formula.slope * index + (formula.intersect ?? 0)
+  } else {
+    const _formula = tariff === 'peak' ? formula.peak : formula.offPeak
+    return _formula.slope * index + (_formula.intersect ?? 0)
   }
 }
