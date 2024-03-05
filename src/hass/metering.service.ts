@@ -7,10 +7,10 @@ import { Cron } from '@nestjs/schedule'
 import { HassStateResponse } from './hass-state.model'
 import { MeteringEntity } from './metering.entity'
 import { PricingService } from '@src/pricing/pricing.service'
-import { PriceDetail } from '@src/pricing/spot-result.model'
 import { MeteringSnapshotEntity } from './meter-snapshots.entity'
 import { first, tryit } from '@bruyland/utilities'
 import { MeteringResume, MeterValues } from './meter-values.model'
+import { UnitPrices, UnitPricesWithPeriod } from '@src/pricing/price-calculation.model'
 
 type MeterValueKey = keyof Omit<MeterValues, 'timestamp'>
 const ENERGY_ENTITIES: Record<MeterValueKey, string> = {
@@ -21,6 +21,7 @@ const ENERGY_ENTITIES: Record<MeterValueKey, string> = {
   batCharge: 'sensor.battery_total_charge',
   batDischarge: 'sensor.battery_total_discharge',
   gas: 'sensor.gas_consumed_belgium',
+  batSOC: 'sensor.battery_state_of_capacity',
 }
 
 @Injectable()
@@ -29,7 +30,7 @@ export class MeteringService {
   private readonly _axios: Axios
   startQuarterMeterValues?: MeterValues = undefined
   private _lastGoodMeterValues!: MeterValues
-  prices?: PriceDetail = undefined
+  prices?: UnitPricesWithPeriod = undefined
 
   constructor(
     private readonly _config: ConfigService,
@@ -83,7 +84,7 @@ export class MeteringService {
     const [from, till] = getPeriod()
     if (this.startQuarterMeterValues) {
       if (!this.prices || this.prices.till <= now)
-        this.prices = await this._pricingService.getPrices(meterValues.timestamp)
+        this.prices = await this._pricingService.getUnitPricesSet(meterValues.timestamp)
       const resume = await makeResume(
         meterValues,
         this.startQuarterMeterValues,
@@ -92,8 +93,13 @@ export class MeteringService {
       )
 
       try {
-        await this._em.upsert(MeteringEntity, resume)
+        //TODO bemerk in tabel - periode loopt maar over enkele seconden !
+        await em.upsert(MeteringEntity, resume)
         if (isQuarter(now)) {
+          // console.log(
+          //   `Saved to metering tabel : from=${format(resume.from, 'HH:mm')}, cons=${resume.consumption}` +
+          //     `, batsCh=${resume.batCharge}, batDisCh=${resume.batDischarge}`,
+          // )
           try {
             await em.upsert(MeteringSnapshotEntity, meterValues)
           } catch (err2) {
@@ -101,10 +107,10 @@ export class MeteringService {
           }
           printMeteringResume(resume, this.prices, (msg: string) => this._log.log(msg))
           this.startQuarterMeterValues = meterValues
+        } else {
         }
       } catch (error) {
         console.error(error)
-        debugger
       }
     }
   }
@@ -139,9 +145,9 @@ export class MeteringService {
   }
 }
 
-function printMeteringResume(r: MeteringResume, p: PriceDetail, logFn: (msg: string) => void) {
-  const andere = r.tariff === 'peak' ? p.otherTotalPeak : p.otherTotalOffPeak
-  const totaal = andere + p.consumption
+function printMeteringResume(r: MeteringResume, p: UnitPrices, logFn: (msg: string) => void) {
+  // const andere = r.tariff === 'peak' ? p.otherTotalPeak : p.otherTotalOffPeak
+  const totaal = 0 //andere + p.consumption
   const msg =
     `metering ${format(r.from, 'HH:mm')} -> ${format(r.till, 'HH:mm')}  ` +
     `cons ${(r.consumption * 1000).toFixed(0)}Wh @ ${totaal.toFixed(1)}c€/kWh, ` +
@@ -157,18 +163,19 @@ function printMeteringResume(r: MeteringResume, p: PriceDetail, logFn: (msg: str
 async function makeResume(
   till: MeterValues,
   from: MeterValues,
-  prices: PriceDetail,
+  prices: UnitPrices,
   errLogFn: (msg: string) => void,
 ) {
   const consDiff = till.consOffPeak + till.consPeak - (from.consOffPeak + from.consPeak)
   const consumption = Math.max(0, consDiff)
   const injDiff = till.injOffPeak + till.injPeak - (from.injOffPeak + from.injPeak)
   const injection = Math.max(0, injDiff)
+  //TODO! zelfde als vorige nemen indien beide nul + 's nachts zo-bij-zo off-paek
   const tariff =
     till.consOffPeak - from.consOffPeak > till.consPeak - from.consPeak ? 'off-peak' : 'peak'
   let [costElec, costGas, yieldElec] = [0, 0, 0]
   if (prices) {
-    const priceElecOther = tariff == 'peak' ? prices.otherTotalPeak : prices.otherTotalOffPeak
+    const priceElecOther = 0 //tariff == 'peak' ? prices.otherTotalPeak : prices.otherTotalOffPeak
     costElec = (prices.consumption + priceElecOther) * consumption
     costGas = 0 * (till.gas - from.gas) //TODO! gasprijs
     yieldElec = prices.injection * injection

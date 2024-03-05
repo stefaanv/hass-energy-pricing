@@ -3,7 +3,9 @@ import { EntityCaseNamingStrategy, MariaDbDriver, Options } from '@mikro-orm/mar
 import { Migrator, TSMigrationGenerator } from '@mikro-orm/migrations'
 import config from './config'
 import { readdirSync } from 'fs'
+import { resolve } from 'path'
 
+//TODO!!! migrations folder voor .pm2 !!!
 const cfg = config()
 const dbCfg = cfg.database
 const onDev = __dirname.endsWith('dist')
@@ -23,11 +25,12 @@ const options: Options = {
   driverOptions: {
     timezone: 'Europe/Brussels',
   },
+  debug: false,
   charset: 'utf8mb4',
   extensions: [Migrator],
   migrations: {
     tableName: 'mikro_orm_migrations', // name of database table with log of executed transactions
-    path: onDev ? './dist/migrations' : mikroOrmCli ? 'src/migrations' : 'migrations',
+    path: onDev ? './dist/migrations' : mikroOrmCli ? 'src/migrations' : './migrations',
     // glob: '!(*.d).{js,ts}', // how to match migration files (all .js and .ts files, but not .d.ts)
     transactional: true, // wrap each migration in a transaction
     disableForeignKeys: true, // wrap statements with `set foreign_key_checks = 0` or equivalent
@@ -40,6 +43,8 @@ const options: Options = {
   },
 }
 
+console.log(`__dirname = ${__dirname}`)
+console.log(`. = ${resolve('.')}`)
 console.log(`Migrations folder = ${options.migrations?.path}`)
 if (options.migrations?.path) {
   const migrations = readdirSync(options.migrations.path).filter(f => f.endsWith('.js'))

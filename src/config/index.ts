@@ -22,18 +22,4 @@ export default () => ({
     password: process.env.DB_PASSWORD,
     dbName: 'energy',
   },
-  pricing: {
-    energie: /** in c€/kWh */ (index: number) => 0.204 + index / 10,
-    andere: /** telkens in c€/kWh */ {
-      'distributie-dag': 5.2295,
-      'distributie-nacht': 5.2295,
-      transport: 0.4792,
-      'groene-stroom': 1.1643,
-      wkk: 0.4144,
-      accijnzen: 5.0322,
-      energiebijdrage: 0.203,
-      'vlaamse-energiebijdrage': 0.45,
-    },
-    injectie: (index: number) => index / 10,
-  },
 })

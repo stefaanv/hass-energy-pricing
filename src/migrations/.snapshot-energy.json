@@ -165,6 +165,15 @@
           "nullable": false,
           "mappedType": "float"
         },
+        "batSOC": {
+          "name": "batSOC",
+          "type": "float",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "float"
+        },
         "gas": {
           "name": "gas",
           "type": "float",

@@ -1,3 +1,5 @@
+import { Period } from '@src/pricing/period.model'
+
 export interface MeterValues {
   /** Timestamp of the metering values capture */
   timestamp: Date
@@ -15,6 +17,8 @@ export interface MeterValues {
   batDischarge: number
   /** gas consumption value */
   gas: number
+  /** battery State-Of_Charge */
+  batSOC: number
 }
 
 export const emptyMeterValues: MeterValues = {
@@ -25,14 +29,11 @@ export const emptyMeterValues: MeterValues = {
   gas: 0,
   injOffPeak: 0,
   injPeak: 0,
+  batSOC: 0,
   timestamp: new Date(),
 }
 
-export interface MeteringResume {
-  /** start of the time periode */
-  from: Date
-  /** end of the time periode */
-  till: Date
+export interface MeteringResume extends Period {
   /** consumption from the grid in kWh */
   consumption: number
   /** injection into the grid in kWh */

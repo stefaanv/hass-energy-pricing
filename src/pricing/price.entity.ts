@@ -1,16 +1,18 @@
 import { EntitySchema } from '@mikro-orm/mariadb'
-import { PriceDetail } from './spot-result.model'
+import { PriceIndexValue } from './price-calculation.model'
 
-export const PriceEntity = new EntitySchema<PriceDetail>({
-  name: 'price',
+export const IndexEntity = new EntitySchema<PriceIndexValue>({
+  name: 'IndexEntity',
+  tableName: 'index',
   properties: {
     from: { type: Date, primary: true },
     till: { type: Date },
     index: { type: 'float' },
-    consumption: { type: 'float' },
-    injection: { type: 'float' },
-    otherTotalPeak: { type: 'float' },
-    otherTotalOffPeak: { type: 'float' },
-    otherDetails: { type: 'json' },
   },
 })
+//
+// consumption: { type: 'float' },
+// injection: { type: 'float' },
+// otherTotalPeak: { type: 'float' },
+// otherTotalOffPeak: { type: 'float' },
+// otherDetails: { type: 'json' },

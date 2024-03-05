@@ -14,6 +14,7 @@ export class Migration20240303090945 extends Migration {
       "injOffPeak" float not null, 
       "batCharge" float not null, 
       "batDischarge" float not null, 
+      "batSOC" float not null, 
       "gas" float not null, 
       default character set utf8mb4 engine = InnoDB;`.replaceAll(/"/g, '`'),
     )
