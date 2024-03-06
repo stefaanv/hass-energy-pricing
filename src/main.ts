@@ -5,6 +5,7 @@ import { AppModule } from './app.module'
 import { MikroORM } from '@mikro-orm/core'
 import { INestApplication } from '@nestjs/common'
 import { PricingService } from './pricing/pricing.service'
+import { CostService } from './pricing/cost.service'
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -16,6 +17,8 @@ async function bootstrap() {
   const logger = new Logger('main')
   logger.log(`hass-energy-pricing started, listening to port ${port}`)
   await updateSchema(app)
+  const costService = app.get(CostService)
+  costService.costOn(new Date())
 }
 
 bootstrap()

@@ -5,7 +5,6 @@ import config from './config'
 import { readdirSync } from 'fs'
 import { resolve } from 'path'
 
-//TODO!!! migrations folder voor .pm2 !!!
 const cfg = config()
 const dbCfg = cfg.database
 const onDev = __dirname.endsWith('dist')

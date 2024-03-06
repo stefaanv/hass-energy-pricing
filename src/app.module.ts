@@ -5,11 +5,12 @@ import { AppService } from './app.service'
 import config from '@src/config'
 import { PricingService } from './pricing/pricing.service'
 import { MikroOrmModule } from '@mikro-orm/nestjs'
-import { MariaDbDriver } from '@mikro-orm/mariadb'
+import { MariaDbDriver, EntityManager } from '@mikro-orm/mariadb'
 import { EntityCaseNamingStrategy } from '@mikro-orm/core'
 import { ScheduleModule } from '@nestjs/schedule'
 import { MeteringService } from './hass/metering.service'
 import dbConfig from './mikro-orm.config'
+import { CostService } from './pricing/cost.service'
 
 @Module({
   imports: [
@@ -20,7 +21,7 @@ import dbConfig from './mikro-orm.config'
     ScheduleModule.forRoot(),
   ],
   controllers: [AppController],
-  providers: [AppService, PricingService, MeteringService],
+  providers: [AppService, PricingService, MeteringService, CostService],
 })
 export class AppModule {}
 

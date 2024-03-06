@@ -151,7 +151,7 @@ export class MeteringService {
     const disCharge =
       resume.batDischarge > 0.001 ? `batDis ${(resume.batDischarge * 1000).toFixed(0)}Wh, ` : ''
 
-    this._log.log(header + consumption + injection + charge + disCharge + resume.tariff)
+    this._log.log(header + consumption + injection + charge + disCharge + prices?.tariff)
   }
 }
 
@@ -160,7 +160,6 @@ async function makeResume(till: MeterValues, from: MeterValues, errLogFn: (msg: 
   const consumption = Math.max(0, consDiff)
   const injDiff = till.injOffPeak + till.injPeak - (from.injOffPeak + from.injPeak)
   const injection = Math.max(0, injDiff)
-  //TODO! zelfde als vorige nemen indien beide nul + 's nachts zo-bij-zo off-paek
   const tariff =
     till.consOffPeak - from.consOffPeak > till.consPeak - from.consPeak ? 'off-peak' : 'peak'
   let batCharge = till.batCharge - from.batCharge
