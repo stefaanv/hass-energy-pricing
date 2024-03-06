@@ -1,5 +1,5 @@
 import { EntitySchema } from '@mikro-orm/mariadb'
-import { PriceIndexValue } from './price-calculation.model'
+import { PriceIndexValue } from './index-value.model'
 
 export const IndexEntity = new EntitySchema<PriceIndexValue>({
   name: 'IndexEntity',

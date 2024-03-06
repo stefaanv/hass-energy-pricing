@@ -1,6 +1,5 @@
 import { EntitySchema } from '@mikro-orm/mariadb'
-import { DualPriceFormulaSet, PriceFormulaSet } from './price-calculation.model'
-import { Period } from './period.model'
+import { DualPriceFormulaSet } from './formulas/dual-price-formula-set.model'
 
 export const PriceFormulaEntity = new EntitySchema<DualPriceFormulaSet>({
   name: 'PriceFormulaEntity',

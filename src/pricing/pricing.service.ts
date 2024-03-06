@@ -6,18 +6,15 @@ import { tryit } from '@bruyland/utilities'
 import { addHours, format, parseISO } from 'date-fns'
 import { utcToZonedTime } from 'date-fns-tz'
 import { EntityManager } from '@mikro-orm/mariadb'
-import { IndexEntity } from './price.entity'
+import { IndexEntity } from './index-value/index-value.entity'
 import { Cron } from '@nestjs/schedule'
-import {
-  DualPriceFormulaSet,
-  PriceFormulaSet,
-  PriceIndexValue,
-  SinglePriceFormula,
-  UnitPrices,
-  UnitPricesWithPeriod,
-} from './price-calculation.model'
+import { UnitPrices, UnitPricesWithPeriod } from './unit-prices.model'
 import { PriceFormulaEntity } from './price-formula.entity'
 import { mapValues } from 'radash'
+import { PriceIndexValue } from './index-value/index-value.model'
+import { PriceFormulaSet } from './formulas/price-formula-set.model'
+import { DualPriceFormulaSet } from './formulas/dual-price-formula-set.model'
+import { SinglePriceFormula } from './single-price-formula.model'
 
 // TODO: alleen de index waarden opslaan
 // TODO: berekeningsparameters in DB stoppen
@@ -53,6 +50,7 @@ export class PricingService {
     return { ...indexValue, ...priceDetailFromIndex(indexValue, peakFormula) }
   }
 
+  //TODO - peak/off-peak berekening introduceren
   async getUnitPricesSetForPeriod(from: Date, till: Date) {
     const em = this._em.fork()
     const indexValues = await em.find(

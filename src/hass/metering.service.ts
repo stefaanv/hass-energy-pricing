@@ -10,7 +10,7 @@ import { PricingService } from '@src/pricing/pricing.service'
 import { MeteringSnapshotEntity } from './meter-snapshots.entity'
 import { first, tryit } from '@bruyland/utilities'
 import { MeteringResume, MeterValues } from './meter-values.model'
-import { UnitPrices, UnitPricesWithPeriod } from '@src/pricing/price-calculation.model'
+import { UnitPrices, UnitPricesWithPeriod } from '@src/pricing/unit-prices.model'
 
 type MeterValueKey = keyof Omit<MeterValues, 'timestamp'>
 const ENERGY_ENTITIES: Record<MeterValueKey, string> = {
