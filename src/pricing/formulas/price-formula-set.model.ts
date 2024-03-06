@@ -1,4 +1,4 @@
-import { SinglePriceFormula } from '../single-price-formula.model'
+import { SinglePriceFormula } from './single-price-formula.model'
 
 export interface PriceFormulaSet {
   /** formula for consuming from the grid */

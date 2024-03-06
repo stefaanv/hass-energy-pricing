@@ -9,16 +9,17 @@ import { EntityManager } from '@mikro-orm/mariadb'
 import { IndexEntity } from './index-value/index-value.entity'
 import { Cron } from '@nestjs/schedule'
 import { UnitPrices, UnitPricesWithPeriod } from './unit-prices.model'
-import { PriceFormulaEntity } from './price-formula.entity'
+import { PriceFormulaEntity } from './formulas/price-formula.entity'
 import { mapValues } from '@bruyland/utilities'
 import { PriceIndexValue } from './index-value/index-value.model'
 import { PriceFormulaSet } from './formulas/price-formula-set.model'
 import { DualPriceFormulaSet } from './formulas/dual-price-formula-set.model'
-import { SinglePriceFormula } from './single-price-formula.model'
+import { SinglePriceFormula } from './formulas/single-price-formula.model'
 
 // TODO: alleen de index waarden opslaan
 // TODO: berekeningsparameters in DB stoppen
 // TODO: funtie maken die prijs onmiddellijk berekent (uit index opgehaald uit DB)
+// TODO: pricing cache vandaag+morgen voorzien (ophalen uit DB + berekening), foutmelding indien de cache niet opgevuld is
 
 @Injectable()
 export class PricingService {
@@ -36,7 +37,9 @@ export class PricingService {
   async getUnitPricesSet(time: Date): Promise<UnitPricesWithPeriod | undefined> {
     try {
       return first(await this.getUnitPricesSetForPeriod(time, time))
-    } catch (error) {}
+    } catch (error) {
+      this._log.warn(`unable to ertreive price info for ${format(time, 'd/M HH:mm')} timestamp`)
+    }
     return undefined
   }
 
