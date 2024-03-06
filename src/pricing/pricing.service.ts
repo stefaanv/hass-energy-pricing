@@ -64,7 +64,7 @@ export class PricingService {
     )) as DualPriceFormulaSet[]
     return indexValues.map((iv: PriceIndexValue) => {
       //TODO geval opvangen als er geen formule gevonden word
-      const formula = formulaEntities.find(fe => fe.from <= iv.from && fe.till >= iv.till)!.peak
+      const formula = formulaEntities.find(fe => fe.from <= iv.from && fe.till >= iv.till)!
       return { ...iv, ...this.priceDetailFromIndex(iv, formula) } as UnitPricesWithPeriod
     })
   }
@@ -122,13 +122,17 @@ export class PricingService {
   }
 
   // TODO: volledige prijzformule peak of off-peak maken en beide eigen DB kolom steken
-  priceDetailFromIndex(indexValue: PriceIndexValue, formulaSet: PriceFormulaSet) {
-    const index = indexValue.index
-    const otherTotal = Object.values(formulaSet.otherDetails).reduce((accu, curr) => accu + curr, 0)
+  priceDetailFromIndex(indexValue: PriceIndexValue, dualFormulaSet: DualPriceFormulaSet) {
     const dayOfWeek = indexValue.from.getDay()
     const hour = indexValue.from.getHours()
     const tariff =
       this._peakDays.includes(dayOfWeek) && this._peakHours.includes(hour) ? 'peak' : 'off-peak'
+    const index = indexValue.index
+    const formulaSet =
+      tariff === 'peak'
+        ? dualFormulaSet.peak
+        : { ...dualFormulaSet.peak, ...dualFormulaSet['off-peak'] }
+    const otherTotal = Object.values(formulaSet.otherDetails).reduce((accu, curr) => accu + curr, 0)
 
     return {
       tariff,

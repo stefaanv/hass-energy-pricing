@@ -31,7 +31,6 @@ export class MeteringService {
   private readonly _axios: Axios
   startQuarterMeterValues?: MeterValues = undefined
   private _lastGoodMeterValues!: MeterValues
-  prices?: UnitPricesWithPeriod = undefined
 
   constructor(
     private readonly _config: ConfigService,
@@ -82,28 +81,22 @@ export class MeteringService {
         meterValues[key] = value
       }
     }
-    const [from, till] = getPeriod()
+
     if (this.startQuarterMeterValues) {
-      if (!this.prices || this.prices.till <= now)
-        this.prices = await this._pricingService.getUnitPricesSet(meterValues.timestamp)
+      const prices = await this._pricingService.getUnitPricesSet(meterValues.timestamp)
       const resume = await makeResume(meterValues, this.startQuarterMeterValues, (msg: string) =>
         this._log.error(msg),
       )
 
       try {
-        //TODO bemerk in tabel - periode loopt maar over enkele seconden !
         await em.upsert(MeteringEntity, resume)
         if (isQuarter(now)) {
-          // console.log(
-          //   `Saved to metering tabel : from=${format(resume.from, 'HH:mm')}, cons=${resume.consumption}` +
-          //     `, batsCh=${resume.batCharge}, batDisCh=${resume.batDischarge}`,
-          // )
           try {
             await em.upsert(MeteringSnapshotEntity, meterValues)
           } catch (err2) {
             debugger
           }
-          printMeteringResume(resume, this.prices, (msg: string) => this._log.log(msg))
+          this.printMeteringResume(resume, prices)
           this.startQuarterMeterValues = meterValues
         } else {
         }
@@ -141,29 +134,25 @@ export class MeteringService {
     }
     return parsed
   }
-}
 
-function printMeteringResume(
-  resume: MeteringResume,
-  prices: UnitPrices | undefined,
-  logFn: (msg: string) => void,
-) {
-  // const andere = r.tariff === 'peak' ? p.otherTotalPeak : p.otherTotalOffPeak
-  const consTotalPrice = prices ? prices.consumption + prices.otherTotal : 0
-  const msg =
-    `metering ${format(resume.from, 'HH:mm')} -> ${format(resume.till, 'HH:mm')}  ` +
-    `cons ${(resume.consumption * 1000).toFixed(0)}Wh ` +
-    prices
-      ? `@ ${consTotalPrice.toFixed(1)}c€/kWh, `
-      : '' +
-        (resume.injection > 0.001
-          ? `inj ${(resume.injection * 1000).toFixed(0)}Wh ` +
-            (prices ? `@ ${prices.injection.toFixed(1)}c€/kWh, ` : '')
-          : '') +
-        (resume.batCharge > 0.001 || resume.batDischarge > 0.001
-          ? `batCh ${(resume.batCharge * 1000).toFixed(0)}Wh, batDis ${(resume.batDischarge * 1000).toFixed(0)}Wh, `
-          : '')
-  logFn(msg)
+  printMeteringResume(resume: MeteringResume, prices: UnitPrices | undefined) {
+    const consTotalPrice = prices ? prices.consumption + prices.otherTotal : 0
+    const header = `${format(resume.from, 'HH:mm')} -> ${format(resume.till, 'HH:mm')} `
+    const consumption =
+      `cons ${(resume.consumption * 1000).toFixed(0)}Wh ` +
+      (prices ? `@ ${consTotalPrice.toFixed(1)}c€/kWh, ` : '')
+    const injection =
+      resume.injection > 0.001
+        ? `inj ${(resume.injection * 1000).toFixed(0)}Wh ` +
+          (prices ? `@ ${prices.injection.toFixed(1)}c€/kWh, ` : '')
+        : ''
+    const charge =
+      resume.batCharge > 0.001 ? `batCh ${(resume.batCharge * 1000).toFixed(0)}Wh, ` : ''
+    const disCharge =
+      resume.batDischarge > 0.001 ? `batDis ${(resume.batDischarge * 1000).toFixed(0)}Wh, ` : ''
+
+    this._log.log(header + consumption + injection + charge + disCharge + resume.tariff)
+  }
 }
 
 async function makeResume(till: MeterValues, from: MeterValues, errLogFn: (msg: string) => void) {
