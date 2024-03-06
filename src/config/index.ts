@@ -12,6 +12,10 @@ export default () => ({
       decimals: 5,
     },
   },
+  peakPeriods: {
+    days: [1, 2, 3, 4, 5], //ma-vr,feestdagen spelen geen rol 1
+    hours: { from: 6, till: 20 }, // Kortrijk is in lijst uitzonderingen: dag van 6:00 tot 21:00
+  },
   homeAssistant: {
     baseUrl: 'http://192.168.0.3:8123/api',
     bearerToken: process.env.HASS_AUTH_TOKEN,

@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config'
 import { SpotResult } from './spot-result.model'
 import axios from 'axios'
 import { first, tryit } from '@bruyland/utilities'
-import { addHours, format, parseISO } from 'date-fns'
+import { addHours, differenceInHours, format, parseISO } from 'date-fns'
 import { utcToZonedTime } from 'date-fns-tz'
 import { EntityManager } from '@mikro-orm/mariadb'
 import { IndexEntity } from './index-value/index-value.entity'
@@ -24,6 +24,8 @@ import { SinglePriceFormula } from './formulas/single-price-formula.model'
 @Injectable()
 export class PricingService {
   private readonly _log: LoggerService
+  private readonly _peakHours: number[]
+  private readonly _peakDays: number[]
 
   constructor(
     private readonly _config: ConfigService,
@@ -32,6 +34,10 @@ export class PricingService {
     this._log = new Logger(PricingService.name)
     // Wait 5 seconds to allow DB stuff to be handled in bootstrap()
     setTimeout(() => this.addIndexValuesToDb(), 2000)
+    this._peakDays = this._config.get('peakPeriods.days', [1, 2, 3, 4, 5])
+    const peakFrom = this._config.get('peakPeriods.hours.from', 6)
+    const peakTill = this._config.get('peakPeriods.hours.till', 20)
+    this._peakHours = Array.from({ length: peakTill - peakFrom + 1 }, (_, i) => peakFrom + i)
   }
 
   async getUnitPricesSet(time: Date): Promise<UnitPricesWithPeriod | undefined> {
@@ -59,7 +65,7 @@ export class PricingService {
     return indexValues.map((iv: PriceIndexValue) => {
       //TODO geval opvangen als er geen formule gevonden word
       const formula = formulaEntities.find(fe => fe.from <= iv.from && fe.till >= iv.till)!.peak
-      return { ...iv, ...priceDetailFromIndex(iv, formula) } as UnitPricesWithPeriod
+      return { ...iv, ...this.priceDetailFromIndex(iv, formula) } as UnitPricesWithPeriod
     })
   }
 
@@ -69,6 +75,8 @@ export class PricingService {
     const em = this._em.fork()
     const lastPriceInDb = await em.find(IndexEntity, {}, { orderBy: [{ till: -1 }], limit: 1 })
     const lastKnown = lastPriceInDb.length > 0 ? lastPriceInDb[0].till : new Date(1970)
+    if (differenceInHours(lastKnown, new Date()) > 24) return // stop if more than 24h available
+
     this._log.log(`last known price ${format(lastKnown, 'd MMMM @ HH:mm')}`)
     const newPrices = prices.filter(p => p.till > lastKnown)
     if (newPrices.length > 0) {
@@ -100,32 +108,6 @@ export class PricingService {
     })
   }
 
-  // indexToPrices(detail: DataPoint) {
-  //   const timeZone = this._config.get('timezone', 'Europe/Brussels')
-  //   const otherPricingInfo = this._config.get<Record<string, number>>('pricing.andere', {})
-  //   const consumptionFormula = this._config.get<(arg0: number) => number>('pricing.energie')
-  //   const injectionFormula = this._config.get<(arg0: number) => number>('pricing.injectie')
-  //   if (!consumptionFormula || !injectionFormula)
-  //     throw new Error(`energie of injectie formule niet gedefinieerd`)
-  //   const startTime = utcToZonedTime(parseISO(detail.st), timeZone)
-  //   const endTime = addHours(startTime, 1)
-  //   const index = parseFloat(detail.p)
-  //   const andereTotaal = listify(otherPricingInfo, (k, v) =>
-  //     k.startsWith('distributie') ? undefined : v,
-  //   ).reduce((ac: number, v) => ac + (v ?? 0), 0)
-
-  //   return {
-  //     index,
-  //     from: startTime,
-  //     till: endTime,
-  //     consumption: consumptionFormula!(index),
-  //     injection: injectionFormula!(index),
-  //     otherDetails: otherPricingInfo,
-  //     otherTotalPeak: andereTotaal + otherPricingInfo['distributie-dag'],
-  //     otherTotalOffPeak: andereTotaal + otherPricingInfo['distributie-nacht'],
-  //   } as PriceDetail
-  // }
-
   printPrice(pd: UnitPricesWithPeriod) {
     const dag = format(pd.from, 'd/MM')
     const start = format(pd.from, 'HH:mm')
@@ -138,22 +120,27 @@ export class PricingService {
         `e=${cons}, ad=${andereTot}, i=${inj}`,
     )
   }
-}
 
-// TODO: volledige prijzformule peak of off-peak maken en beide eigen DB kolom steken
-function priceDetailFromIndex(indexValue: PriceIndexValue, formulaSet: PriceFormulaSet) {
-  const index = indexValue.index
-  const otherTotal = Object.values(formulaSet.otherDetails).reduce((accu, curr) => accu + curr, 0)
+  // TODO: volledige prijzformule peak of off-peak maken en beide eigen DB kolom steken
+  priceDetailFromIndex(indexValue: PriceIndexValue, formulaSet: PriceFormulaSet) {
+    const index = indexValue.index
+    const otherTotal = Object.values(formulaSet.otherDetails).reduce((accu, curr) => accu + curr, 0)
+    const dayOfWeek = indexValue.from.getDay()
+    const hour = indexValue.from.getHours()
+    const tariff =
+      this._peakDays.includes(dayOfWeek) && this._peakHours.includes(hour) ? 'peak' : 'off-peak'
 
-  return {
-    from: indexValue.from,
-    till: indexValue.till,
-    index,
-    consumption: round3d(priceCalcSingle(index, formulaSet.consumption)),
-    injection: round3d(priceCalcSingle(index, formulaSet.injection)),
-    otherTotal: round3d(otherTotal),
-    otherDetails: mapValues(formulaSet.otherDetails, v => round3d(v)),
-  } as UnitPrices
+    return {
+      tariff,
+      from: indexValue.from,
+      till: indexValue.till,
+      index,
+      consumption: round3d(priceCalcSingle(index, formulaSet.consumption)),
+      injection: round3d(priceCalcSingle(index, formulaSet.injection)),
+      otherTotal: round3d(otherTotal),
+      otherDetails: mapValues(formulaSet.otherDetails, v => round3d(v)),
+    } as UnitPrices
+  }
 }
 
 function priceCalcSingle(index: number, formula: SinglePriceFormula): number {

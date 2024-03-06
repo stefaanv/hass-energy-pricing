@@ -1,6 +1,7 @@
 import { PriceIndexValue } from './index-value/index-value.model'
 
 export interface UnitPrices {
+  tariff: 'peak' | 'off-peak'
   /** price per kWh for consuming from the grid */
   consumption: number
   /** price per kWh for injecting into the grid */
