@@ -2,7 +2,7 @@ import { Injectable, Logger, LoggerService } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { SpotResult } from './spot-result.model'
 import axios from 'axios'
-import { tryit } from '@bruyland/utilities'
+import { first, tryit } from '@bruyland/utilities'
 import { addHours, format, parseISO } from 'date-fns'
 import { utcToZonedTime } from 'date-fns-tz'
 import { EntityManager } from '@mikro-orm/mariadb'
@@ -10,7 +10,7 @@ import { IndexEntity } from './index-value/index-value.entity'
 import { Cron } from '@nestjs/schedule'
 import { UnitPrices, UnitPricesWithPeriod } from './unit-prices.model'
 import { PriceFormulaEntity } from './price-formula.entity'
-import { mapValues } from 'radash'
+import { mapValues } from '@bruyland/utilities'
 import { PriceIndexValue } from './index-value/index-value.model'
 import { PriceFormulaSet } from './formulas/price-formula-set.model'
 import { DualPriceFormulaSet } from './formulas/dual-price-formula-set.model'
@@ -33,21 +33,11 @@ export class PricingService {
     setTimeout(() => this.addIndexValuesToDb(), 2000)
   }
 
-  async getUnitPricesSet(time: Date): Promise<UnitPricesWithPeriod> {
-    const em = this._em.fork()
-    const indexValue = (await em.findOne(
-      IndexEntity,
-      { from: { $lte: time } },
-      { orderBy: [{ from: -1 }] },
-    )) as PriceIndexValue
-    const formulaEntity = await em.findOne(
-      PriceFormulaEntity,
-      { from: { $lte: time } },
-      { orderBy: [{ from: -1 }] },
-    )
-    if (!formulaEntity?.peak) throw new Error(`Pricing formula not found in the database`)
-    const peakFormula = formulaEntity?.peak as PriceFormulaSet
-    return { ...indexValue, ...priceDetailFromIndex(indexValue, peakFormula) }
+  async getUnitPricesSet(time: Date): Promise<UnitPricesWithPeriod | undefined> {
+    try {
+      return first(await this.getUnitPricesSetForPeriod(time, time))
+    } catch (error) {}
+    return undefined
   }
 
   //TODO - peak/off-peak berekening introduceren
@@ -64,9 +54,9 @@ export class PricingService {
       { orderBy: [{ from: 1 }] },
     )) as DualPriceFormulaSet[]
     return indexValues.map((iv: PriceIndexValue) => {
-      //TODO geval opvangen als er geen formule gevonden wordt
+      //TODO geval opvangen als er geen formule gevonden word
       const formula = formulaEntities.find(fe => fe.from <= iv.from && fe.till >= iv.till)!.peak
-      return { ...iv, ...priceDetailFromIndex(iv, formula) }
+      return { ...iv, ...priceDetailFromIndex(iv, formula) } as UnitPricesWithPeriod
     })
   }
 
@@ -76,7 +66,7 @@ export class PricingService {
     const em = this._em.fork()
     const lastPriceInDb = await em.find(IndexEntity, {}, { orderBy: [{ till: -1 }], limit: 1 })
     const lastKnown = lastPriceInDb.length > 0 ? lastPriceInDb[0].till : new Date(1970)
-    this._log.log(`last known price is from ${format(lastKnown, 'd MMMM @ HH:mm')}`)
+    this._log.log(`last known price ${format(lastKnown, 'd MMMM @ HH:mm')}`)
     const newPrices = prices.filter(p => p.till > lastKnown)
     if (newPrices.length > 0) {
       await em.insertMany(IndexEntity, newPrices)

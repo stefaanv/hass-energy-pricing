@@ -9,8 +9,9 @@ import { MeteringEntity } from './metering.entity'
 import { PricingService } from '@src/pricing/pricing.service'
 import { MeteringSnapshotEntity } from './meter-snapshots.entity'
 import { first, tryit } from '@bruyland/utilities'
-import { MeteringResume, MeterValues } from './meter-values.model'
+import { MeterValues } from './meter-values.model'
 import { UnitPrices, UnitPricesWithPeriod } from '@src/pricing/unit-prices.model'
+import { MeteringResume } from './metering-resume.model'
 
 type MeterValueKey = keyof Omit<MeterValues, 'timestamp'>
 const ENERGY_ENTITIES: Record<MeterValueKey, string> = {
@@ -85,11 +86,8 @@ export class MeteringService {
     if (this.startQuarterMeterValues) {
       if (!this.prices || this.prices.till <= now)
         this.prices = await this._pricingService.getUnitPricesSet(meterValues.timestamp)
-      const resume = await makeResume(
-        meterValues,
-        this.startQuarterMeterValues,
-        this.prices,
-        (msg: string) => this._log.error(msg),
+      const resume = await makeResume(meterValues, this.startQuarterMeterValues, (msg: string) =>
+        this._log.error(msg),
       )
 
       try {
@@ -145,27 +143,30 @@ export class MeteringService {
   }
 }
 
-function printMeteringResume(r: MeteringResume, p: UnitPrices, logFn: (msg: string) => void) {
+function printMeteringResume(
+  resume: MeteringResume,
+  prices: UnitPrices | undefined,
+  logFn: (msg: string) => void,
+) {
   // const andere = r.tariff === 'peak' ? p.otherTotalPeak : p.otherTotalOffPeak
-  const totaal = 0 //andere + p.consumption
+  const consTotalPrice = prices ? prices.consumption + prices.otherTotal : 0
   const msg =
-    `metering ${format(r.from, 'HH:mm')} -> ${format(r.till, 'HH:mm')}  ` +
-    `cons ${(r.consumption * 1000).toFixed(0)}Wh @ ${totaal.toFixed(1)}c€/kWh, ` +
-    (r.injection > 0.001
-      ? `inj ${(r.injection * 1000).toFixed(0)}Wh @ ${p.injection.toFixed(1)}c€/kWh, `
-      : '') +
-    (r.batCharge > 0.001 || r.batDischarge > 0.001
-      ? `batCh ${(r.batCharge * 1000).toFixed(0)}Wh, batDis ${(r.batDischarge * 1000).toFixed(0)}Wh, `
-      : '')
+    `metering ${format(resume.from, 'HH:mm')} -> ${format(resume.till, 'HH:mm')}  ` +
+    `cons ${(resume.consumption * 1000).toFixed(0)}Wh ` +
+    prices
+      ? `@ ${consTotalPrice.toFixed(1)}c€/kWh, `
+      : '' +
+        (resume.injection > 0.001
+          ? `inj ${(resume.injection * 1000).toFixed(0)}Wh ` +
+            (prices ? `@ ${prices.injection.toFixed(1)}c€/kWh, ` : '')
+          : '') +
+        (resume.batCharge > 0.001 || resume.batDischarge > 0.001
+          ? `batCh ${(resume.batCharge * 1000).toFixed(0)}Wh, batDis ${(resume.batDischarge * 1000).toFixed(0)}Wh, `
+          : '')
   logFn(msg)
 }
 
-async function makeResume(
-  till: MeterValues,
-  from: MeterValues,
-  prices: UnitPrices,
-  errLogFn: (msg: string) => void,
-) {
+async function makeResume(till: MeterValues, from: MeterValues, errLogFn: (msg: string) => void) {
   const consDiff = till.consOffPeak + till.consPeak - (from.consOffPeak + from.consPeak)
   const consumption = Math.max(0, consDiff)
   const injDiff = till.injOffPeak + till.injPeak - (from.injOffPeak + from.injPeak)
@@ -173,13 +174,6 @@ async function makeResume(
   //TODO! zelfde als vorige nemen indien beide nul + 's nachts zo-bij-zo off-paek
   const tariff =
     till.consOffPeak - from.consOffPeak > till.consPeak - from.consPeak ? 'off-peak' : 'peak'
-  let [costElec, costGas, yieldElec] = [0, 0, 0]
-  if (prices) {
-    const priceElecOther = 0 //tariff == 'peak' ? prices.otherTotalPeak : prices.otherTotalOffPeak
-    costElec = (prices.consumption + priceElecOther) * consumption
-    costGas = 0 * (till.gas - from.gas) //TODO! gasprijs
-    yieldElec = prices.injection * injection
-  }
   let batCharge = till.batCharge - from.batCharge
   let batDischarge = till.batDischarge - from.batDischarge
   if (isNaN(batCharge)) {
