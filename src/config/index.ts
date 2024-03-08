@@ -19,6 +19,18 @@ export default () => ({
   homeAssistant: {
     baseUrl: 'http://192.168.0.3:8123/api',
     bearerToken: process.env.HASS_AUTH_TOKEN,
+    entityNames: {
+      // van slimmemeter
+      consPeak: 'sensor.energy_consumed_tariff_1',
+      consOffPeak: 'sensor.energy_consumed_tariff_2',
+      injPeak: 'sensor.energy_produced_tariff_1',
+      injOffPeak: 'sensor.energy_produced_tariff_2',
+      gas: 'sensor.gas_consumed_belgium',
+      // van inverter
+      batCharge: 'sensor.battery_total_charge',
+      batDischarge: 'sensor.battery_total_discharge',
+      batSOC: 'sensor.battery_state_of_capacity',
+    },
   },
   database: {
     host: '192.168.0.3',

@@ -12,7 +12,6 @@ import { UnitPrices, UnitPricesWithPeriod } from './unit-prices.model'
 import { PriceFormulaEntity } from './formulas/price-formula.entity'
 import { mapValues } from '@bruyland/utilities'
 import { PriceIndexValue } from './index-value/index-value.model'
-import { PriceFormulaSet } from './formulas/price-formula-set.model'
 import { DualPriceFormulaSet } from './formulas/dual-price-formula-set.model'
 import { SinglePriceFormula } from './formulas/single-price-formula.model'
 

@@ -9,28 +9,18 @@ import { MeteringEntity } from './metering.entity'
 import { PricingService } from '@src/pricing/pricing.service'
 import { MeteringSnapshotEntity } from './meter-snapshots.entity'
 import { first, tryit } from '@bruyland/utilities'
-import { MeterValues } from './meter-values.model'
-import { UnitPrices, UnitPricesWithPeriod } from '@src/pricing/unit-prices.model'
+import { MeterValues, RequestableMeterValueKeys } from './meter-values.model'
+import { UnitPrices } from '@src/pricing/unit-prices.model'
 import { MeteringResume } from './metering-resume.model'
-
-type MeterValueKey = keyof Omit<MeterValues, 'timestamp'>
-const ENERGY_ENTITIES: Record<MeterValueKey, string> = {
-  consPeak: 'sensor.energy_consumed_tariff_1',
-  consOffPeak: 'sensor.energy_consumed_tariff_2',
-  injPeak: 'sensor.energy_produced_tariff_1',
-  injOffPeak: 'sensor.energy_produced_tariff_2',
-  batCharge: 'sensor.battery_total_charge',
-  batDischarge: 'sensor.battery_total_discharge',
-  gas: 'sensor.gas_consumed_belgium',
-  batSOC: 'sensor.battery_state_of_capacity',
-}
 
 @Injectable()
 export class MeteringService {
   private readonly _log: LoggerService
   private readonly _axios: Axios
-  startQuarterMeterValues?: MeterValues = undefined
+  startQuarterMeterValues = new MeterValues()
   private _lastGoodMeterValues!: MeterValues
+  private readonly _entityNameTranslation: Record<RequestableMeterValueKeys, string>
+  monthPeakExceededFlagged = false
 
   constructor(
     private readonly _config: ConfigService,
@@ -42,6 +32,12 @@ export class MeteringService {
     if (!baseURL) throw new Error('HomeAssitant host not known')
     const bearer = this._config.get('homeAssistant.bearerToken')
     if (!bearer) throw new Error('HomeAssitant auth bearer token not known')
+    const tTrans = this._config.get<Record<RequestableMeterValueKeys, string>>(
+      'homeAssistant.entityNames',
+    )
+    if (!tTrans) throw new Error('HomeAssitant entity tranlation table not found')
+    this._entityNameTranslation = tTrans
+
     this._axios = axios.create({
       baseURL,
       timeout: 1000,
@@ -60,19 +56,19 @@ export class MeteringService {
     const snap = first(snaps)
     if (!snap) return
     const age = differenceInMinutes(new Date(), snap.timestamp)
-    this.startQuarterMeterValues = { ...snap }
-    this._lastGoodMeterValues = { ...snap }
+    this.startQuarterMeterValues = new MeterValues(snap)
+    this._lastGoodMeterValues = new MeterValues(snap)
     this._log.log(`retreived metering snapshot timestamped ${format(snap.timestamp, 'HH:mm')}`)
   }
 
   @Cron('*/10 * * * * *')
   async getMeasurements() {
     const now = roundTime(new Date())
-    const meterValues = {} as MeterValues
-    meterValues.timestamp = now
+    const meterValues = new MeterValues()
     const em = this._em.fork()
 
-    for (const [key, _] of Object.entries(ENERGY_ENTITIES) as [MeterValueKey, string][]) {
+    // get all requestable values from Home Assistant
+    for (const key of Object.keys(this._entityNameTranslation) as RequestableMeterValueKeys[]) {
       const [error, value] = await tryit(() => this.getHassNumericState(key))()
       if (error) {
         this._log.error(error.message)
@@ -80,13 +76,20 @@ export class MeteringService {
       } else {
         meterValues[key] = value
       }
+      // update the monthly consumption peak if exceeded
+      if (meterValues.consTotal > meterValues.monthPeakValue) {
+        if (!this.monthPeakExceededFlagged)
+          this._log.log(`monthly consumption peak is being exceeded`)
+        meterValues.monthPeakValue = meterValues.consTotal
+        meterValues.monthPeakTime = this.startQuarterMeterValues?.timestamp ?? new Date()
+        this.monthPeakExceededFlagged = true
+      }
     }
 
-    if (this.startQuarterMeterValues) {
+    if (isQuarter(now)) {
+      // 15min boundary
       const prices = await this._pricingService.getUnitPricesSet(meterValues.timestamp)
-      const resume = await makeResume(meterValues, this.startQuarterMeterValues, (msg: string) =>
-        this._log.error(msg),
-      )
+      const resume = meterValues.makeResume(this.startQuarterMeterValues)
 
       try {
         await em.upsert(MeteringEntity, resume)
@@ -103,11 +106,12 @@ export class MeteringService {
       } catch (error) {
         console.error(error)
       }
+      this.monthPeakExceededFlagged = false
     }
   }
 
-  async getHassNumericState(entityId: MeterValueKey): Promise<number> {
-    const hassEntityKey = ENERGY_ENTITIES[entityId]
+  async getHassNumericState(entityId: RequestableMeterValueKeys): Promise<number> {
+    const hassEntityKey = this._entityNameTranslation[entityId]
     const rlkv = `returning last known value`
     //TODO entityId en duidelijke foutmelding als warning geven, undefined teruggeven
     const lastGood = this._lastGoodMeterValues[entityId] ?? 0
@@ -136,52 +140,20 @@ export class MeteringService {
   }
 
   printMeteringResume(resume: MeteringResume, prices: UnitPrices | undefined) {
-    const consTotalPrice = prices ? prices.consumption + prices.otherTotal : 0
+    const consTotalPrice = prices ? prices.consumption + prices.otherTotal : undefined
     const header = `${format(resume.from, 'HH:mm')} -> ${format(resume.till, 'HH:mm')} `
-    const consumption =
-      `cons ${(resume.consumption * 1000).toFixed(0)}Wh ` +
-      (prices ? `@ ${consTotalPrice.toFixed(1)}c€/kWh, ` : '')
-    const injection =
-      resume.injection > 0.001
-        ? `inj ${(resume.injection * 1000).toFixed(0)}Wh ` +
-          (prices ? `@ ${prices.injection.toFixed(1)}c€/kWh, ` : '')
-        : ''
-    const charge =
-      resume.batCharge > 0.001 ? `batCh ${(resume.batCharge * 1000).toFixed(0)}Wh, ` : ''
-    const disCharge =
-      resume.batDischarge > 0.001 ? `batDis ${(resume.batDischarge * 1000).toFixed(0)}Wh, ` : ''
+    const consumption = printSingle(resume.consumption, 'cons', consTotalPrice)
+    const injection = printSingle(resume.injection, 'inj', prices?.injection)
+    const charge = printSingle(resume.batCharge, 'batCh')
+    const disCharge = printSingle(resume.batDischarge, 'batDis')
 
-    this._log.log(header + consumption + injection + charge + disCharge + prices?.tariff)
+    this._log.log(header + [consumption, injection, charge, disCharge, prices?.tariff].join(', '))
   }
 }
 
-async function makeResume(till: MeterValues, from: MeterValues, errLogFn: (msg: string) => void) {
-  const consDiff = till.consOffPeak + till.consPeak - (from.consOffPeak + from.consPeak)
-  const consumption = Math.max(0, consDiff)
-  const injDiff = till.injOffPeak + till.injPeak - (from.injOffPeak + from.injPeak)
-  const injection = Math.max(0, injDiff)
-  const tariff =
-    till.consOffPeak - from.consOffPeak > till.consPeak - from.consPeak ? 'off-peak' : 'peak'
-  let batCharge = till.batCharge - from.batCharge
-  let batDischarge = till.batDischarge - from.batDischarge
-  if (isNaN(batCharge)) {
-    batCharge = 0
-    errLogFn(`batCharge is NaN`)
-  }
-  if (isNaN(batDischarge)) {
-    batDischarge = 0
-    errLogFn(`batDischarge is NaN`)
-  }
-  return {
-    from: from.timestamp,
-    till: till.timestamp,
-    tariff,
-    consumption,
-    injection,
-    batCharge,
-    batDischarge,
-    gas: till.gas - from.gas,
-  } as MeteringResume
+function printSingle(value: number, name: string, price?: number) {
+  if (value < 0.001) return ''
+  return `${name} ${(value * 1000).toFixed(0)}Wh ` + (price ? `@ ${price.toFixed(1)}c€/kWh, ` : '')
 }
 
 function getPeriod(date = new Date()): Date[] {
