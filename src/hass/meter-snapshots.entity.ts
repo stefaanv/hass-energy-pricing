@@ -13,7 +13,5 @@ export const MeteringSnapshotEntity = new EntitySchema<IMeterValues>({
     batDischarge: { type: 'float' },
     batSOC: { type: 'float' },
     gas: { type: 'float' },
-    monthPeakTime: { type: 'timestamp' },
-    monthPeakValue: { type: 'float' },
   },
 })

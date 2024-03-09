@@ -129,6 +129,25 @@
             "off-peak"
           ],
           "mappedType": "enum"
+        },
+        "monthPeakValue": {
+          "name": "monthPeakValue",
+          "type": "float",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "float"
+        },
+        "monthPeakTime": {
+          "name": "monthPeakTime",
+          "type": "datetime",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 0,
+          "mappedType": "datetime"
         }
       },
       "name": "metering",
@@ -225,6 +244,25 @@
         },
         "gas": {
           "name": "gas",
+          "type": "float",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "float"
+        },
+        "monthPeakTime": {
+          "name": "monthPeakTime",
+          "type": "datetime",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 0,
+          "mappedType": "datetime"
+        },
+        "monthPeakValue": {
+          "name": "monthPeakValue",
           "type": "float",
           "unsigned": false,
           "autoincrement": false,

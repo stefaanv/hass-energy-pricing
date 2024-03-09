@@ -5,13 +5,15 @@ import { differenceInMinutes, format } from 'date-fns'
 import { EntityManager } from '@mikro-orm/mariadb'
 import { Cron } from '@nestjs/schedule'
 import { HassStateResponse } from './hass-state.model'
-import { MeteringEntity } from './metering.entity'
+import { MeteringResumeEntity } from './metering.entity'
 import { PricingService } from '@src/pricing/pricing.service'
 import { MeteringSnapshotEntity } from './meter-snapshots.entity'
-import { first, tryit } from '@bruyland/utilities'
+import { first, omit, tryit } from '@bruyland/utilities'
 import { MeterValues, RequestableMeterValueKeys } from './meter-values.model'
 import { UnitPrices } from '@src/pricing/unit-prices.model'
-import { MeteringResume } from './metering-resume.model'
+import { emptyResume, MeteringResume } from './metering-resume.model'
+
+type EntityTransTable = Record<RequestableMeterValueKeys, string>
 
 @Injectable()
 export class MeteringService {
@@ -19,8 +21,11 @@ export class MeteringService {
   private readonly _axios: Axios
   startQuarterMeterValues = new MeterValues()
   private _lastGoodMeterValues!: MeterValues
-  private readonly _entityNameTranslation: Record<RequestableMeterValueKeys, string>
+  private readonly _entityNameTranslation: EntityTransTable
   monthPeakExceededFlagged = false
+  resume = emptyResume
+  private _monthPeakValue: number = 0
+  private _monthPeakTime: Date = new Date()
 
   constructor(
     private readonly _config: ConfigService,
@@ -32,9 +37,7 @@ export class MeteringService {
     if (!baseURL) throw new Error('HomeAssitant host not known')
     const bearer = this._config.get('homeAssistant.bearerToken')
     if (!bearer) throw new Error('HomeAssitant auth bearer token not known')
-    const tTrans = this._config.get<Record<RequestableMeterValueKeys, string>>(
-      'homeAssistant.entityNames',
-    )
+    const tTrans = this._config.get<EntityTransTable>('homeAssistant.entityNames')
     if (!tTrans) throw new Error('HomeAssitant entity tranlation table not found')
     this._entityNameTranslation = tTrans
 
@@ -50,15 +53,19 @@ export class MeteringService {
   }
 
   async getLastSnapshot() {
-    const snaps = await this._em
-      .fork()
-      .find(MeteringSnapshotEntity, {}, { orderBy: { timestamp: 'desc' }, limit: 1 })
-    const snap = first(snaps)
-    if (!snap) return
-    const age = differenceInMinutes(new Date(), snap.timestamp)
-    this.startQuarterMeterValues = new MeterValues(snap)
-    this._lastGoodMeterValues = new MeterValues(snap)
-    this._log.log(`retreived metering snapshot timestamped ${format(snap.timestamp, 'HH:mm')}`)
+    const em = this._em.fork()
+    const wClause = (field: string) => ({ orderBy: { [field]: 'desc' }, limit: 1 })
+    const snap = first(await em.find(MeteringSnapshotEntity, {}, wClause('timestamp')))
+    const resume = first(await em.find(MeteringResumeEntity, {}, wClause('from')))
+    if (snap) {
+      this.startQuarterMeterValues = new MeterValues(snap)
+      this._lastGoodMeterValues = new MeterValues(snap)
+    }
+    if (resume) {
+      this._monthPeakTime = resume.monthPeakTime ?? new Date()
+      this._monthPeakValue = resume.monthPeakValue
+    }
+    this._log.log(`retreived previous metering data`)
   }
 
   @Cron('*/10 * * * * *')
@@ -68,46 +75,48 @@ export class MeteringService {
     const em = this._em.fork()
 
     // get all requestable values from Home Assistant
+    let errorLogged = false
     for (const key of Object.keys(this._entityNameTranslation) as RequestableMeterValueKeys[]) {
       const [error, value] = await tryit(() => this.getHassNumericState(key))()
       if (error) {
-        this._log.error(error.message)
+        if (!errorLogged) {
+          this._log.error(error.message)
+          errorLogged = true
+        }
         meterValues[key] = this.startQuarterMeterValues?.[key] ?? 0
       } else {
         meterValues[key] = value
       }
       // update the monthly consumption peak if exceeded
-      if (meterValues.consTotal > meterValues.monthPeakValue) {
+      if (meterValues.consTotal > this._monthPeakValue) {
         if (!this.monthPeakExceededFlagged)
           this._log.log(`monthly consumption peak is being exceeded`)
-        meterValues.monthPeakValue = meterValues.consTotal
-        meterValues.monthPeakTime = this.startQuarterMeterValues?.timestamp ?? new Date()
+        this._monthPeakValue = meterValues.consTotal
+        this._monthPeakTime = this.startQuarterMeterValues?.timestamp ?? new Date()
         this.monthPeakExceededFlagged = true
       }
     }
 
-    if (isQuarter(now)) {
-      // 15min boundary
-      const prices = await this._pricingService.getUnitPricesSet(meterValues.timestamp)
-      const resume = meterValues.makeResume(this.startQuarterMeterValues)
+    const prices = await this._pricingService.getUnitPricesSet(meterValues.timestamp)
+    this.resume = meterValues.makeResume(this.startQuarterMeterValues)
 
-      try {
-        await em.upsert(MeteringEntity, resume)
-        if (isQuarter(now)) {
-          try {
-            await em.upsert(MeteringSnapshotEntity, meterValues)
-          } catch (err2) {
-            debugger
-          }
-          this.printMeteringResume(resume, prices)
-          this.startQuarterMeterValues = meterValues
-        } else {
+    try {
+      await em.upsert(MeteringResumeEntity, this.resume)
+      if (isQuarter(now)) {
+        // 15min boundary
+        try {
+          await em.upsert(MeteringSnapshotEntity, omit(meterValues, ['exceedingPeak']))
+        } catch (err2) {
+          debugger
         }
-      } catch (error) {
-        console.error(error)
+        this.printMeteringResume(this.resume, prices)
+        this.startQuarterMeterValues = meterValues
+      } else {
       }
-      this.monthPeakExceededFlagged = false
+    } catch (error) {
+      console.error(error)
     }
+    this.monthPeakExceededFlagged = false
   }
 
   async getHassNumericState(entityId: RequestableMeterValueKeys): Promise<number> {

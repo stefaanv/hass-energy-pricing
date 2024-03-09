@@ -3,7 +3,7 @@ import { QueryOrder, raw } from '@mikro-orm/core'
 import { EntityManager } from '@mikro-orm/mariadb'
 import { Injectable, Logger, LoggerService } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import { MeteringEntity } from '@src/hass/metering.entity'
+import { MeteringResumeEntity } from '@src/hass/metering.entity'
 import { format } from 'date-fns'
 import { costStarter } from './cost-detail.model'
 import { PricingService } from './pricing.service'
@@ -24,7 +24,7 @@ export class CostService {
 
   async costOn(day: Date) {
     const em = this._em.fork()
-    const qb = em.createQueryBuilder(MeteringEntity, 'm')
+    const qb = em.createQueryBuilder(MeteringResumeEntity, 'm')
     const mData = await qb
       .select('*')
       .where({ [raw('DATE(m.from)')]: format(day, 'yyyy-MM-dd') })

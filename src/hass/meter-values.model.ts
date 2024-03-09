@@ -10,8 +10,6 @@ export interface IMeterValues {
   batDischarge: number
   gas: number
   batSOC: number
-  monthPeakValue: number
-  monthPeakTime: Date
 }
 
 export const calculatedMeterValueKeys = [
@@ -55,9 +53,6 @@ export class MeterValues implements IMeterValues {
   batSOC: number
   /** indicates that the peak is being exceeded in the current quarter */
   exceedingPeak: boolean
-  /** monthly peak value */
-  monthPeakValue: number
-  monthPeakTime: Date
 
   get consTotal() {
     return this.consOffPeak + this.consPeak
@@ -78,8 +73,6 @@ export class MeterValues implements IMeterValues {
     this.batSOC = snap ? snap.batSOC : 0
     this.timestamp = snap ? snap.timestamp : new Date()
     this.exceedingPeak = false
-    this.monthPeakValue = snap ? snap.monthPeakValue : 0
-    this.monthPeakTime = snap ? snap.monthPeakTime : new Date()
   }
 
   makeResume(from: MeterValues) {
