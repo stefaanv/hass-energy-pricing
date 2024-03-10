@@ -35,8 +35,15 @@ export class CostService {
     const till = last(mData)!.till
     const pData = await this._pricingService.getUnitPricesSetForPeriod(from, till)
     const otherTotalUP = first(pData)!.otherTotal
+    let pError = false
+    //TODO: foutmelding geven als voor sommige meterwaarden geen prijs beschikbaar is
     const totals = mData.reduce((accu, curr) => {
-      const p = pData.find(p => p.from <= curr.from && p.till >= curr.till)! as UnitPricesWithPeriod
+      let p = pData.find(p => p.from <= curr.from && p.till >= curr.till) as UnitPricesWithPeriod
+      if (!p) {
+        p = first(pData)!
+        pError = true
+      }
+
       return {
         consumption: {
           amount: accu.consumption.amount + curr.consumption,
@@ -52,7 +59,9 @@ export class CostService {
         },
       } as CostDetail
     }, costStarter(otherTotalUP))
-    //TODO! unit price other nakijken, is factor 100 te klein
+    if (pError) {
+      console.error(`some prices were missing during cost calculation`)
+    }
     //TODO klasse maken van CostCalc met methode voor toevoegen
     totals.consumption.unitPrice = totals.consumption.price / totals.consumption.amount
     totals.injection.unitPrice = totals.injection.price / totals.injection.amount

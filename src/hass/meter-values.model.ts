@@ -1,4 +1,5 @@
 import { MeteringResume } from './metering-resume.model'
+import { MonthPeak } from './month-peak.model'
 
 export interface IMeterValues {
   timestamp: Date
@@ -75,7 +76,7 @@ export class MeterValues implements IMeterValues {
     this.exceedingPeak = false
   }
 
-  makeResume(from: MeterValues) {
+  updateResume(from: MeterValues, peak: MonthPeak) {
     const consDiff = this.consOffPeak + this.consPeak - (from.consOffPeak + from.consPeak)
     const consumption = Math.max(0, consDiff)
     const injDiff = this.injOffPeak + this.injPeak - (from.injOffPeak + from.injPeak)
@@ -85,14 +86,9 @@ export class MeterValues implements IMeterValues {
     let batCharge = this.batCharge - from.batCharge
     let batDischarge = this.batDischarge - from.batDischarge
     //TODO; nakijken of console.error weg kan
-    if (isNaN(batCharge)) {
-      batCharge = 0
-      console.error(`batCharge is NaN`)
-    }
-    if (isNaN(batDischarge)) {
-      batDischarge = 0
-      console.error(`batDischarge is NaN`)
-    }
+    if (isNaN(batCharge)) batCharge = 0
+    if (isNaN(batDischarge)) batDischarge = 0
+    peak.update(consumption, from.timestamp)
     return {
       from: from.timestamp,
       till: this.timestamp,

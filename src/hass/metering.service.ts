@@ -12,6 +12,7 @@ import { first, omit, tryit } from '@bruyland/utilities'
 import { MeterValues, RequestableMeterValueKeys } from './meter-values.model'
 import { UnitPrices } from '@src/pricing/unit-prices.model'
 import { emptyResume, MeteringResume } from './metering-resume.model'
+import { MonthPeak } from './month-peak.model'
 
 type EntityTransTable = Record<RequestableMeterValueKeys, string>
 
@@ -24,8 +25,7 @@ export class MeteringService {
   private readonly _entityNameTranslation: EntityTransTable
   monthPeakExceededFlagged = false
   resume = emptyResume
-  private _monthPeakValue: number = 0
-  private _monthPeakTime: Date = new Date()
+  private _peak = new MonthPeak(new Date(), 0)
 
   constructor(
     private readonly _config: ConfigService,
@@ -62,8 +62,10 @@ export class MeteringService {
       this._lastGoodMeterValues = new MeterValues(snap)
     }
     if (resume) {
-      this._monthPeakTime = resume.monthPeakTime ?? new Date()
-      this._monthPeakValue = resume.monthPeakValue
+      this._peak = new MonthPeak(resume.monthPeakTime ?? new Date(), resume.monthPeakValue)
+      this.resume = resume
+      console.log(`collected previous resume`)
+      // console.log(this.resume)
     }
     this._log.log(`retreived previous metering data`)
   }
@@ -88,30 +90,34 @@ export class MeteringService {
         meterValues[key] = value
       }
       // update the monthly consumption peak if exceeded
-      if (meterValues.consTotal > this._monthPeakValue) {
+      if (meterValues.consTotal > this.resume.monthPeakValue) {
+        //TODO! hiervoor de MonthlyPeak klasse gebruiken
         if (!this.monthPeakExceededFlagged)
           this._log.log(`monthly consumption peak is being exceeded`)
-        this._monthPeakValue = meterValues.consTotal
-        this._monthPeakTime = this.startQuarterMeterValues?.timestamp ?? new Date()
+        this.resume.monthPeakValue = meterValues.consTotal
+        this.resume.monthPeakTime = this.startQuarterMeterValues?.timestamp ?? new Date()
         this.monthPeakExceededFlagged = true
       }
     }
 
+    //TODO: prijzen cachen
     const prices = await this._pricingService.getUnitPricesSet(meterValues.timestamp)
-    this.resume = meterValues.makeResume(this.startQuarterMeterValues)
+    //TODO! Berekeningen nog eens nakijken
+    //TODO nakijken of laatste piek waarde goed opgeladen wordt uit de DB
+    // TODO! berekening van peak/off-peak volledige nakijken
+    //TODO waar wordt de piek gereset in het begin v/d maand ?
+    this.resume = meterValues.updateResume(this.startQuarterMeterValues, this._peak)
 
     try {
+      //TODO piek waarden nog toevoegen
+      this.resume.monthPeakTime = this._peak.time
+      this.resume.monthPeakValue = this._peak.value
       await em.upsert(MeteringResumeEntity, this.resume)
       if (isQuarter(now)) {
         // 15min boundary
-        try {
-          await em.upsert(MeteringSnapshotEntity, omit(meterValues, ['exceedingPeak']))
-        } catch (err2) {
-          debugger
-        }
+        await em.upsert(MeteringSnapshotEntity, omit(meterValues, ['exceedingPeak']))
         this.printMeteringResume(this.resume, prices)
         this.startQuarterMeterValues = meterValues
-      } else {
       }
     } catch (error) {
       console.error(error)

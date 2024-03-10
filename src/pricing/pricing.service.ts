@@ -77,6 +77,8 @@ export class PricingService {
     if (differenceInHours(lastKnown, new Date()) > 24) return // stop if more than 24h available
 
     this._log.log(`last known price ${format(lastKnown, 'd MMMM @ HH:mm')}`)
+    if (!prices) return //spot website down
+
     const newPrices = prices.filter(p => p.till > lastKnown)
     if (newPrices.length > 0) {
       await em.insertMany(IndexEntity, newPrices)
@@ -91,8 +93,8 @@ export class PricingService {
     // const [error, rawSpotInfo] = await tryit((uri) => axios.get<SpotResult>(uri))(uri)
     const [error, rawSpotInfo] = await tryit(axios.get)<SpotResult>(uri)
     if (error) {
-      console.log(error)
-      debugger
+      this._log.error(`Unable to get SPOT data`)
+      return
     }
 
     // process the result
