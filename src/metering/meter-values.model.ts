@@ -1,5 +1,5 @@
-import { MeteringResume } from './metering-resume.model'
-import { MonthPeak } from './month-peak.model'
+import { isDate } from 'radash'
+import { roundTime15m } from './time.helpers'
 
 export interface IMeterValues {
   timestamp: Date
@@ -63,41 +63,22 @@ export class MeterValues implements IMeterValues {
     return this.injOffPeak + this.injPeak
   }
 
-  constructor(snap?: IMeterValues) {
-    this.batCharge = snap ? snap.batCharge : 0
-    this.batDischarge = snap ? snap.batDischarge : 0
-    this.consOffPeak = snap ? snap.consOffPeak : 0
-    this.consPeak = snap ? snap.consPeak : 0
-    this.gas = snap ? snap.gas : 0
-    this.injOffPeak = snap ? snap.injOffPeak : 0
-    this.injPeak = snap ? snap.injPeak : 0
-    this.batSOC = snap ? snap.batSOC : 0
-    this.timestamp = snap ? snap.timestamp : new Date()
+  constructor(param?: IMeterValues | Date) {
+    const now = new Date()
+    this.batCharge = 0
+    this.batDischarge = 0
+    this.consOffPeak = 0
+    this.consPeak = 0
+    this.gas = 0
+    this.injOffPeak = 0
+    this.injPeak = 0
+    this.batSOC = 0
     this.exceedingPeak = false
-  }
-
-  updateResume(from: MeterValues, peak: MonthPeak) {
-    const consDiff = this.consOffPeak + this.consPeak - (from.consOffPeak + from.consPeak)
-    const consumption = Math.max(0, consDiff)
-    const injDiff = this.injOffPeak + this.injPeak - (from.injOffPeak + from.injPeak)
-    const injection = Math.max(0, injDiff)
-    const tariff =
-      this.consOffPeak - from.consOffPeak > this.consPeak - from.consPeak ? 'off-peak' : 'peak'
-    let batCharge = this.batCharge - from.batCharge
-    let batDischarge = this.batDischarge - from.batDischarge
-    //TODO; nakijken of console.error weg kan
-    if (isNaN(batCharge)) batCharge = 0
-    if (isNaN(batDischarge)) batDischarge = 0
-    peak.update(consumption, from.timestamp)
-    return {
-      from: from.timestamp,
-      till: this.timestamp,
-      tariff,
-      consumption,
-      injection,
-      batCharge,
-      batDischarge,
-      gas: this.gas - from.gas,
-    } as MeteringResume
+    this.timestamp = new Date()
+    if (!param || isDate(param)) {
+      this.timestamp = roundTime15m(now)
+    } else {
+      Object.assign(this, param)
+    }
   }
 }

@@ -1,5 +1,5 @@
 import { Controller, Get } from '@nestjs/common'
-import { MeteringService } from './hass/metering.service'
+import { MeteringService } from '@src/metering/metering.service'
 
 @Controller()
 export class AppController {

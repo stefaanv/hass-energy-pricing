@@ -1,18 +1,19 @@
 import { Injectable, Logger, LoggerService } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import axios, { Axios } from 'axios'
-import { differenceInMinutes, format } from 'date-fns'
+import { format } from 'date-fns'
 import { EntityManager } from '@mikro-orm/mariadb'
 import { Cron } from '@nestjs/schedule'
-import { HassStateResponse } from './hass-state.model'
+import { HassStateResponse } from '@src/hass/hass-state.model'
 import { MeteringResumeEntity } from './metering.entity'
 import { PricingService } from '@src/pricing/pricing.service'
 import { MeteringSnapshotEntity } from './meter-snapshots.entity'
 import { first, omit, tryit } from '@bruyland/utilities'
 import { MeterValues, RequestableMeterValueKeys } from './meter-values.model'
 import { UnitPrices } from '@src/pricing/unit-prices.model'
-import { emptyResume, MeteringResume } from './metering-resume.model'
+import { MeteringResume } from './metering-resume.model'
 import { MonthPeak } from './month-peak.model'
+import { roundTime15m, isQuarter } from './time.helpers'
 
 type EntityTransTable = Record<RequestableMeterValueKeys, string>
 
@@ -24,7 +25,7 @@ export class MeteringService {
   private _lastGoodMeterValues!: MeterValues
   private readonly _entityNameTranslation: EntityTransTable
   monthPeakExceededFlagged = false
-  resume = emptyResume
+  resume = new MeteringResume(new MeterValues(), 'off-peak', 0, new Date()) // will be replaced immediately
   private _peak = new MonthPeak(new Date(), 0)
 
   constructor(
@@ -60,21 +61,27 @@ export class MeteringService {
     if (snap) {
       this.startQuarterMeterValues = new MeterValues(snap)
       this._lastGoodMeterValues = new MeterValues(snap)
+      if (resume && snap) {
+        this.resume = MeteringResume.fromEntity(resume as MeteringResume, snap as MeterValues)
+        this._log.verbose!(`collected previous resume from ${format(resume.from, 'd/M @ HH:mm')}`)
+      } else {
+        // fallback when no resume found in the database
+        this.resume = new MeteringResume(snap as MeterValues, 'peak', 0, snap.timestamp)
+        this._log.warn(`Unable to retreive previous resume from database, using fallback`)
+      }
+    } else {
+      const snap = new MeterValues()
+      this.startQuarterMeterValues = snap
+      this._lastGoodMeterValues = snap
+      this.resume = new MeteringResume(snap, 'peak', 0, snap.timestamp)
+      this._log.warn(`Unable to retreive meters snapshot from database, using fallback`)
     }
-    if (resume) {
-      this._peak = new MonthPeak(resume.monthPeakTime ?? new Date(), resume.monthPeakValue)
-      this.resume = resume
-      console.log(`collected previous resume`)
-      // console.log(this.resume)
-    }
-    this._log.log(`retreived previous metering data`)
   }
 
   @Cron('*/10 * * * * *')
   async getMeasurements() {
-    const now = roundTime(new Date())
-    const meterValues = new MeterValues()
     const em = this._em.fork()
+    const meterValues = new MeterValues(new Date())
 
     // get all requestable values from Home Assistant
     let errorLogged = false
@@ -89,40 +96,25 @@ export class MeteringService {
       } else {
         meterValues[key] = value
       }
-      // update the monthly consumption peak if exceeded
-      if (meterValues.consTotal > this.resume.monthPeakValue) {
-        //TODO! hiervoor de MonthlyPeak klasse gebruiken
-        if (!this.monthPeakExceededFlagged)
-          this._log.log(`monthly consumption peak is being exceeded`)
-        this.resume.monthPeakValue = meterValues.consTotal
-        this.resume.monthPeakTime = this.startQuarterMeterValues?.timestamp ?? new Date()
-        this.monthPeakExceededFlagged = true
-      }
     }
-
+    this.resume.update(meterValues, (msg: string) => this._log.log(msg))
+    const tariff = 'peak' //TODO! nog berekenen !
     //TODO: prijzen cachen
     const prices = await this._pricingService.getUnitPricesSet(meterValues.timestamp)
-    //TODO! Berekeningen nog eens nakijken
-    //TODO nakijken of laatste piek waarde goed opgeladen wordt uit de DB
-    // TODO! berekening van peak/off-peak volledige nakijken
-    //TODO waar wordt de piek gereset in het begin v/d maand ?
-    this.resume = meterValues.updateResume(this.startQuarterMeterValues, this._peak)
 
     try {
-      //TODO piek waarden nog toevoegen
-      this.resume.monthPeakTime = this._peak.time
-      this.resume.monthPeakValue = this._peak.value
-      await em.upsert(MeteringResumeEntity, this.resume)
-      if (isQuarter(now)) {
+      await em.upsert(
+        MeteringResumeEntity,
+        omit(this.resume, ['monthPeakExceeding', 'startQuarterValues']),
+      )
+      if (isQuarter(meterValues.timestamp)) {
         // 15min boundary
         await em.upsert(MeteringSnapshotEntity, omit(meterValues, ['exceedingPeak']))
         this.printMeteringResume(this.resume, prices)
-        this.startQuarterMeterValues = meterValues
       }
     } catch (error) {
       console.error(error)
     }
-    this.monthPeakExceededFlagged = false
   }
 
   async getHassNumericState(entityId: RequestableMeterValueKeys): Promise<number> {
@@ -169,32 +161,4 @@ export class MeteringService {
 function printSingle(value: number, name: string, price?: number) {
   if (value < 0.001) return ''
   return `${name} ${(value * 1000).toFixed(0)}Wh ` + (price ? `@ ${price.toFixed(1)}c€/kWh, ` : '')
-}
-
-function getPeriod(date = new Date()): Date[] {
-  const minutes = date.getMinutes()
-  const minStart = minutes - (minutes % 15)
-  const minEnd = minStart + 15
-  const year = date.getFullYear()
-  const month = date.getMonth()
-  const dayOfMOnth = date.getDate()
-  const hours = date.getHours()
-  return [
-    new Date(year, month, dayOfMOnth, hours, minStart, 0),
-    new Date(year, month, dayOfMOnth, hours, minEnd, 0),
-  ]
-}
-
-function roundTime(date = new Date()): Date {
-  const seconds = Math.round(date.getSeconds() / 5) * 5
-  const minutes = date.getMinutes()
-  const year = date.getFullYear()
-  const month = date.getMonth()
-  const dayOfMOnth = date.getDate()
-  const hours = date.getHours()
-  return new Date(year, month, dayOfMOnth, hours, minutes, seconds)
-}
-
-function isQuarter(date = new Date()): boolean {
-  return date.getMinutes() % 15 === 0 && date.getSeconds() === 0
 }

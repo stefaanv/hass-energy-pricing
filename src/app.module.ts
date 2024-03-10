@@ -8,7 +8,7 @@ import { MikroOrmModule } from '@mikro-orm/nestjs'
 import { MariaDbDriver, EntityManager } from '@mikro-orm/mariadb'
 import { EntityCaseNamingStrategy } from '@mikro-orm/core'
 import { ScheduleModule } from '@nestjs/schedule'
-import { MeteringService } from './hass/metering.service'
+import { MeteringService } from '@src/metering/metering.service'
 import dbConfig from './mikro-orm.config'
 import { CostService } from './pricing/cost.service'
 
