@@ -3,13 +3,14 @@ import { QueryOrder, raw } from '@mikro-orm/core'
 import { EntityManager } from '@mikro-orm/mariadb'
 import { Injectable, Logger, LoggerService } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import { MeteringResumeEntity } from '@src/metering/metering.entity'
-import { format } from 'date-fns'
+import { MeteringResumeEntity } from '@src/metering/metering-resume.entity'
+import { addSeconds, format } from 'date-fns'
 import { costStarter } from './cost-detail.model'
 import { PricingService } from './pricing.service'
 import { CostDetail } from './cost-detail.model'
 import { UnitPricesWithPeriod } from './unit-prices.model'
 
+//TODO: berekening prijs piekvermogen nog toevoegen
 @Injectable()
 export class CostService {
   private readonly _log: LoggerService
@@ -22,7 +23,7 @@ export class CostService {
     this._log = new Logger(CostService.name)
   }
 
-  async costOn(day: Date) {
+  async costOn(day: Date, logFn: (msg: string) => void) {
     const em = this._em.fork()
     const qb = em.createQueryBuilder(MeteringResumeEntity, 'm')
     const mData = await qb
@@ -38,7 +39,8 @@ export class CostService {
     let pError = false
     //TODO: foutmelding geven als voor sommige meterwaarden geen prijs beschikbaar is
     const totals = mData.reduce((accu, curr) => {
-      let p = pData.find(p => p.from <= curr.from && p.till >= curr.till) as UnitPricesWithPeriod
+      const timestamp = addSeconds(curr.from, 10)
+      let p = pData.find(p => p.from <= timestamp && p.till >= timestamp) as UnitPricesWithPeriod
       if (!p) {
         p = first(pData)!
         pError = true
@@ -60,7 +62,7 @@ export class CostService {
       } as CostDetail
     }, costStarter(otherTotalUP))
     if (pError) {
-      console.error(`some prices were missing during cost calculation`)
+      logFn(`some prices were missing during cost calculation`)
     }
     //TODO klasse maken van CostCalc met methode voor toevoegen
     totals.consumption.unitPrice = totals.consumption.price / totals.consumption.amount

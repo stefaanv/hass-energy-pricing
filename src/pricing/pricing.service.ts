@@ -14,6 +14,7 @@ import { mapValues } from '@bruyland/utilities'
 import { PriceIndexValue } from './index-value/index-value.model'
 import { DualPriceFormulaSet } from './formulas/dual-price-formula-set.model'
 import { SinglePriceFormula } from './formulas/single-price-formula.model'
+import { Tariff } from '@src/metering/tariff.type'
 
 // TODO: alleen de index waarden opslaan
 // TODO: berekeningsparameters in DB stoppen
@@ -48,7 +49,7 @@ export class PricingService {
     return undefined
   }
 
-  //TODO - peak/off-peak berekening introduceren
+  //TODO! - peak/off-peak berekening introduceren
   async getUnitPricesSetForPeriod(from: Date, till: Date) {
     const em = this._em.fork()
     const indexValues = await em.find(
@@ -122,12 +123,17 @@ export class PricingService {
     )
   }
 
+  tariffAt(timestamp = new Date()): Tariff {
+    const dayOfWeek = timestamp.getDay()
+    const hour = timestamp.getHours()
+    return this._peakDays.includes(dayOfWeek) && this._peakHours.includes(hour)
+      ? 'peak'
+      : 'off-peak'
+  }
+
   // TODO: volledige prijzformule peak of off-peak maken en beide eigen DB kolom steken
   priceDetailFromIndex(indexValue: PriceIndexValue, dualFormulaSet: DualPriceFormulaSet) {
-    const dayOfWeek = indexValue.from.getDay()
-    const hour = indexValue.from.getHours()
-    const tariff =
-      this._peakDays.includes(dayOfWeek) && this._peakHours.includes(hour) ? 'peak' : 'off-peak'
+    const tariff = this.tariffAt(indexValue.from)
     const index = indexValue.index
     const formulaSet =
       tariff === 'peak'

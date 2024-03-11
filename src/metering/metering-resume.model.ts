@@ -1,11 +1,9 @@
 import { Period } from '@src/pricing/period.model'
-import { addMinutes } from 'date-fns'
+import { addMinutes, differenceInSeconds } from 'date-fns'
 import { MeterValues } from './meter-values.model'
 import { Tariff } from './tariff.type'
 
 export class MeteringResume extends Period {
-  from = new Date()
-  till = new Date()
   /** consumption from the grid in kWh */
   consumption = 0
   /** injection into the grid in kWh */
@@ -21,6 +19,8 @@ export class MeteringResume extends Period {
   monthPeakExceeding = false
   /** metering snapshot at the at of the quarter */
   public readonly startQuarterValues: MeterValues
+
+  lastExceededReport?: Date
 
   constructor(
     /** metering snapshot at the at of the quarter */
@@ -50,6 +50,7 @@ export class MeteringResume extends Period {
     this.monthPeakExceeding = false
   }
 
+  //TODO! blijft herhaaldelijk 'exceeding peak geven' - throttle mechanisme toevoegen !
   update(current: MeterValues, logFn: (msg: string) => void) {
     const sqv = this.startQuarterValues
     this.consumption = Math.max(0, current.consTotal - this.startQuarterValues.consTotal)
@@ -64,7 +65,13 @@ export class MeteringResume extends Period {
     this.till = current.timestamp
     if (this.consumption > this.monthPeakValue) {
       this.monthPeakExceeding = true
-      logFn(`Exceeding month peak: ${this.consumption}`)
+      if (
+        !this.lastExceededReport ||
+        differenceInSeconds(new Date(), this.lastExceededReport) > 60
+      ) {
+        logFn(`Exceeding month peak: ${this.consumption}`)
+        this.lastExceededReport = new Date()
+      }
       this.monthPeakValue = this.consumption
       this.monthPeakTime = this.from
     }

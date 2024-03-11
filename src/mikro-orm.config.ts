@@ -42,12 +42,12 @@ const options: Options = {
   },
 }
 
-console.log(`__dirname = ${__dirname}`)
-console.log(`. = ${resolve('.')}`)
-console.log(`Migrations folder = ${options.migrations?.path}`)
+// console.log(`__dirname = ${__dirname}`)
+// console.log(`. = ${resolve('.')}`)
+// console.log(`Migrations folder = ${options.migrations?.path}`)
 if (options.migrations?.path) {
   const migrations = readdirSync(options.migrations.path).filter(f => f.endsWith('.js'))
-  console.log(`migrations files`)
-  migrations.forEach(f => console.log('  - ' + f))
+  // console.log(`migrations files`)
+  // migrations.forEach(f => console.log('  - ' + f))
 }
 export default options

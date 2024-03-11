@@ -1,11 +1,11 @@
 import { Injectable, Logger, LoggerService } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import axios, { Axios } from 'axios'
-import { format } from 'date-fns'
+import { addSeconds, format } from 'date-fns'
 import { EntityManager } from '@mikro-orm/mariadb'
 import { Cron } from '@nestjs/schedule'
 import { HassStateResponse } from '@src/hass/hass-state.model'
-import { MeteringResumeEntity } from './metering.entity'
+import { MeteringResumeEntity } from './metering-resume.entity'
 import { PricingService } from '@src/pricing/pricing.service'
 import { MeteringSnapshotEntity } from './meter-snapshots.entity'
 import { first, omit, tryit } from '@bruyland/utilities'
@@ -13,7 +13,7 @@ import { MeterValues, RequestableMeterValueKeys } from './meter-values.model'
 import { UnitPrices } from '@src/pricing/unit-prices.model'
 import { MeteringResume } from './metering-resume.model'
 import { MonthPeak } from './month-peak.model'
-import { roundTime15m, isQuarter } from './time.helpers'
+import { isQuarter } from './time.helpers'
 
 type EntityTransTable = Record<RequestableMeterValueKeys, string>
 
@@ -63,7 +63,9 @@ export class MeteringService {
       this._lastGoodMeterValues = new MeterValues(snap)
       if (resume && snap) {
         this.resume = MeteringResume.fromEntity(resume as MeteringResume, snap as MeterValues)
-        this._log.verbose!(`collected previous resume from ${format(resume.from, 'd/M @ HH:mm')}`)
+        this._log.verbose!(
+          `previous resume : ${format(resume.from, 'd/M @ HH:mm')}, pmonthpeak=${this.resume.monthPeakValue}`,
+        )
       } else {
         // fallback when no resume found in the database
         this.resume = new MeteringResume(snap as MeterValues, 'peak', 0, snap.timestamp)
@@ -78,10 +80,13 @@ export class MeteringService {
     }
   }
 
+  //TODO! waarom wordt maandpiek niet gereset bij herstart + op nul zettem i/d DB ?
+  //TODO! is er iets voorzien om i/h begin v/d maand de maandpiek te clearen ?
   @Cron('*/10 * * * * *')
   async getMeasurements() {
     const em = this._em.fork()
-    const meterValues = new MeterValues(new Date())
+    const now = new Date()
+    const meterValues = new MeterValues(now)
 
     // get all requestable values from Home Assistant
     let errorLogged = false
@@ -98,19 +103,27 @@ export class MeteringService {
       }
     }
     this.resume.update(meterValues, (msg: string) => this._log.log(msg))
-    const tariff = 'peak' //TODO! nog berekenen !
+    this.resume.tariff = this._pricingService.tariffAt(meterValues.timestamp)
     //TODO: prijzen cachen
     const prices = await this._pricingService.getUnitPricesSet(meterValues.timestamp)
 
     try {
       await em.upsert(
         MeteringResumeEntity,
-        omit(this.resume, ['monthPeakExceeding', 'startQuarterValues']),
+        omit(this.resume, ['monthPeakExceeding', 'startQuarterValues', 'lastExceededReport']),
       )
       if (isQuarter(meterValues.timestamp)) {
         // 15min boundary
         await em.upsert(MeteringSnapshotEntity, omit(meterValues, ['exceedingPeak']))
         this.printMeteringResume(this.resume, prices)
+        const newTariff = this._pricingService.tariffAt(addSeconds(now, 10))
+        const newResume = new MeteringResume(
+          meterValues,
+          newTariff,
+          this.resume.monthPeakValue,
+          this.resume.monthPeakTime,
+        )
+        this.resume = newResume
       }
     } catch (error) {
       console.error(error)
