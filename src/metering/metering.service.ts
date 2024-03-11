@@ -108,10 +108,7 @@ export class MeteringService {
     const prices = await this._pricingService.getUnitPricesSet(meterValues.timestamp)
 
     try {
-      await em.upsert(
-        MeteringResumeEntity,
-        omit(this.resume, ['monthPeakExceeding', 'startQuarterValues', 'lastExceededReport']),
-      )
+      await em.upsert(MeteringResumeEntity, this.resume.toEntity())
       if (isQuarter(meterValues.timestamp)) {
         // 15min boundary
         await em.upsert(MeteringSnapshotEntity, omit(meterValues, ['exceedingPeak']))
