@@ -113,10 +113,9 @@ export class MeteringService {
         // 15min boundary
         await em.upsert(MeteringSnapshotEntity, omit(meterValues, ['exceedingPeak']))
         this.printMeteringResume(this.resume, prices)
-        const newTariff = this._pricingService.tariffAt(addSeconds(now, 10))
         const newResume = new MeteringResume(
           meterValues,
-          newTariff,
+          this._pricingService.tariffAt(addSeconds(now, 10)),
           this.resume.monthPeakValue,
           this.resume.monthPeakTime,
         )
@@ -164,14 +163,12 @@ export class MeteringService {
     const charge = printSingle(resume.batCharge, 'batCh')
     const disCharge = printSingle(resume.batDischarge, 'batDis')
 
-    this._log.log(
-      header +
-        [consumption, injection, charge, disCharge, prices?.tariff].filter(s => s != '').join(', '),
-    )
+    const allFiltered = [consumption, injection, charge, disCharge, prices?.tariff].filter(s => s)
+    this._log.log(header + allFiltered.join(', '))
   }
 }
 
 function printSingle(value: number, name: string, price?: number) {
   if (value < 0.001) return ''
-  return `${name} ${(value * 1000).toFixed(0)}Wh ` + (price ? `@ ${price.toFixed(1)}c€/kWh, ` : '')
+  return `${name} ${(value * 1000).toFixed(0)}Wh ` + (price ? `@ ${price.toFixed(1)}c€/kWh` : '')
 }

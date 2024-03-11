@@ -3,6 +3,7 @@ import { addMinutes, differenceInSeconds } from 'date-fns'
 import { MeterValues } from './meter-values.model'
 import { Tariff } from './tariff.type'
 import { pick } from '@bruyland/utilities'
+import { MeteringResumeEntity } from './metering-resume.entity'
 
 export class MeteringResume extends Period {
   /** consumption from the grid in kWh */
@@ -80,6 +81,11 @@ export class MeteringResume extends Period {
       'tariff',
       'monthPeakValue',
       'monthPeakTime',
-    ]) as MeteringResume
+    ]) as Omit<MeteringResume, 'toEntity'>
   }
+
+  // toEntity() {
+  //   const entityKeys: keyof MeteringResume = Object.keys(MeteringResumeEntity.meta.properties) as unknown as keyof MeteringResume
+  //   return pick(this, entityKeys) as Omit<MeteringResume, 'toEntity'>
+  // }
 }
