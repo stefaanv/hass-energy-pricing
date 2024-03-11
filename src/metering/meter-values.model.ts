@@ -1,5 +1,6 @@
 import { isDate } from 'radash'
-import { roundTime15m } from './time.helpers'
+import { roundTime15m, roundTime5s } from './time.helpers'
+import { isObject } from '@bruyland/utilities'
 
 export interface IMeterValues {
   timestamp: Date
@@ -64,7 +65,7 @@ export class MeterValues implements IMeterValues {
   }
 
   constructor(param?: IMeterValues | Date) {
-    const now = new Date()
+    const now = roundTime5s(new Date())
     this.batCharge = 0
     this.batDischarge = 0
     this.consOffPeak = 0
@@ -75,10 +76,10 @@ export class MeterValues implements IMeterValues {
     this.batSOC = 0
     this.exceedingPeak = false
     this.timestamp = new Date()
-    if (!param || isDate(param)) {
-      this.timestamp = roundTime15m(now)
-    } else {
-      Object.assign(this, param)
+    if (isDate(param) || param === undefined) {
+      this.timestamp = roundTime5s(param ?? now)
+      return
     }
+    Object.assign(this, param)
   }
 }

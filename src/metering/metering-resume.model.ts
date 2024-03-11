@@ -38,12 +38,6 @@ export class MeteringResume extends Period {
     this.monthPeakValue
   }
 
-  static fromEntity(resume: MeteringResume, startQuarter: MeterValues): MeteringResume {
-    const result = new MeteringResume(startQuarter, 'peak', 0, new Date())
-    Object.assign(result, resume)
-    return result
-  }
-
   update(current: MeterValues, logFn: (msg: string) => void) {
     const sqv = this._startQuarterValues
     this.consumption = Math.max(0, current.consTotal - this._startQuarterValues.consTotal)
@@ -69,23 +63,24 @@ export class MeteringResume extends Period {
     }
   }
 
-  toEntity() {
-    return pick(this, [
-      'from',
-      'till',
-      'consumption',
-      'injection',
-      'batCharge',
-      'batDischarge',
-      'gas',
-      'tariff',
-      'monthPeakValue',
-      'monthPeakTime',
-    ]) as Omit<MeteringResume, 'toEntity'>
+  newQuarter(startQuarterValues: MeterValues, tariff: Tariff, newMonth = false) {
+    //TODO nog na te kijken of dit correct werkt
+    this._startQuarterValues = startQuarterValues
+    this.tariff = tariff
+    if (newMonth) {
+      this.monthPeakValue = 0
+      this.monthPeakTime = startQuarterValues.timestamp
+    }
   }
 
-  // toEntity() {
-  //   const entityKeys: keyof MeteringResume = Object.keys(MeteringResumeEntity.meta.properties) as unknown as keyof MeteringResume
-  //   return pick(this, entityKeys) as Omit<MeteringResume, 'toEntity'>
-  // }
+  toEntity() {
+    const entityKeys = Object.keys(MeteringResumeEntity.meta.properties) as (keyof MeteringResume)[]
+    return pick(this, entityKeys) as MeteringResume
+  }
+
+  static fromEntity(resume: MeteringResume, startQuarter: MeterValues): MeteringResume {
+    const result = new MeteringResume(startQuarter, 'peak', 0, new Date())
+    Object.assign(result, resume)
+    return result
+  }
 }

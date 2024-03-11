@@ -13,7 +13,7 @@ import { MeterValues, RequestableMeterValueKeys } from './meter-values.model'
 import { UnitPrices } from '@src/pricing/unit-prices.model'
 import { MeteringResume } from './metering-resume.model'
 import { MonthPeak } from './month-peak.model'
-import { isQuarter } from './time.helpers'
+import { isBeginningOfMonth, isQuarter, roundTime5s } from './time.helpers'
 
 type EntityTransTable = Record<RequestableMeterValueKeys, string>
 
@@ -80,12 +80,10 @@ export class MeteringService {
     }
   }
 
-  //TODO! waarom wordt maandpiek niet gereset bij herstart + op nul zettem i/d DB ?
-  //TODO! is er iets voorzien om i/h begin v/d maand de maandpiek te clearen ?
   @Cron('*/10 * * * * *')
   async getMeasurements() {
     const em = this._em.fork()
-    const now = new Date()
+    const now = roundTime5s(new Date())
     const meterValues = new MeterValues(now)
 
     // get all requestable values from Home Assistant
@@ -110,16 +108,13 @@ export class MeteringService {
     try {
       await em.upsert(MeteringResumeEntity, this.resume.toEntity())
       if (isQuarter(meterValues.timestamp)) {
-        // 15min boundary
         await em.upsert(MeteringSnapshotEntity, omit(meterValues, ['exceedingPeak']))
         this.printMeteringResume(this.resume, prices)
-        const newResume = new MeteringResume(
-          meterValues,
-          this._pricingService.tariffAt(addSeconds(now, 10)),
-          this.resume.monthPeakValue,
-          this.resume.monthPeakTime,
-        )
-        this.resume = newResume
+        const tariff = this._pricingService.tariffAt(now)
+        this.resume.newQuarter(meterValues, tariff, isBeginningOfMonth(now))
+
+        //
+        this.printMeteringResume(this.resume, prices) //TODO: nog te verwijderen
       }
     } catch (error) {
       console.error(error)

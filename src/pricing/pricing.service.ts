@@ -16,9 +16,6 @@ import { DualPriceFormulaSet } from './formulas/dual-price-formula-set.model'
 import { SinglePriceFormula } from './formulas/single-price-formula.model'
 import { Tariff } from '@src/metering/tariff.type'
 
-// TODO: alleen de index waarden opslaan
-// TODO: berekeningsparameters in DB stoppen
-// TODO: funtie maken die prijs onmiddellijk berekent (uit index opgehaald uit DB)
 // TODO: pricing cache vandaag+morgen voorzien (ophalen uit DB + berekening), foutmelding indien de cache niet opgevuld is
 
 @Injectable()
@@ -135,13 +132,14 @@ export class PricingService {
   priceDetailFromIndex(indexValue: PriceIndexValue, dualFormulaSet: DualPriceFormulaSet) {
     const tariff = this.tariffAt(indexValue.from)
     const index = indexValue.index
-    const formulaSet =
-      tariff === 'peak'
-        ? dualFormulaSet.peak
-        : { ...dualFormulaSet.peak, ...dualFormulaSet['off-peak'] }
+    const otherDetails = {
+      ...dualFormulaSet.peak.otherDetails,
+      ...dualFormulaSet['off-peak'].otherDetails,
+    }
+    const offPeakSet = { ...dualFormulaSet.peak, ...dualFormulaSet['off-peak'], otherDetails }
+    const formulaSet = tariff === 'peak' ? dualFormulaSet.peak : offPeakSet
     const otherTotal = Object.values(formulaSet.otherDetails).reduce((accu, curr) => accu + curr, 0)
-
-    return {
+    const result = {
       tariff,
       from: indexValue.from,
       till: indexValue.till,
@@ -151,6 +149,7 @@ export class PricingService {
       otherTotal: round3d(otherTotal),
       otherDetails: mapValues(formulaSet.otherDetails, v => round3d(v)),
     } as UnitPrices
+    return result
   }
 }
 

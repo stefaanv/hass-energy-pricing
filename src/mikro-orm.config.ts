@@ -3,7 +3,6 @@ import { EntityCaseNamingStrategy, MariaDbDriver, Options } from '@mikro-orm/mar
 import { Migrator, TSMigrationGenerator } from '@mikro-orm/migrations'
 import config from './config'
 import { readdirSync } from 'fs'
-import { resolve } from 'path'
 
 const cfg = config()
 const dbCfg = cfg.database

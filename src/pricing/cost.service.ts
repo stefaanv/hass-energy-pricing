@@ -5,12 +5,13 @@ import { Injectable, Logger, LoggerService } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { MeteringResumeEntity } from '@src/metering/metering-resume.entity'
 import { addSeconds, format } from 'date-fns'
-import { costStarter } from './cost-detail.model'
 import { PricingService } from './pricing.service'
 import { CostDetail } from './cost-detail.model'
 import { UnitPricesWithPeriod } from './unit-prices.model'
+import { MeteringResume } from '@src/metering/metering-resume.model'
 
 //TODO: berekening prijs piekvermogen nog toevoegen
+//TODO: deze berekening gaat nog niet helemaal goed, nog nakijken !
 @Injectable()
 export class CostService {
   private readonly _log: LoggerService
@@ -35,38 +36,31 @@ export class CostService {
     const from = first(mData)!.from
     const till = last(mData)!.till
     const pData = await this._pricingService.getUnitPricesSetForPeriod(from, till)
-    const otherTotalUP = first(pData)!.otherTotal
-    let pError = false
+    const otherTotalUnitprice = first(pData)!.otherTotal
+
     //TODO: foutmelding geven als voor sommige meterwaarden geen prijs beschikbaar is
-    const totals = mData.reduce((accu, curr) => {
+    const totals = this.sumCosts(mData, pData)
+    //TODO klasse maken van CostCalc met methode voor toevoegen
+    totals.consumption.unitPrice = (totals.consumption.price / totals.consumption.amount) * 100
+    totals.injection.unitPrice = (totals.injection.price / totals.injection.amount) * 100
+    return totals
+  }
+
+  sumCosts(mData: MeteringResume[], pData: UnitPricesWithPeriod[]) {
+    const starter = new CostDetail()
+    const sum = mData.reduce((accu, curr) => {
       const timestamp = addSeconds(curr.from, 10)
       let p = pData.find(p => p.from <= timestamp && p.till >= timestamp) as UnitPricesWithPeriod
-      if (!p) {
-        p = first(pData)!
-        pError = true
-      }
-
-      return {
-        consumption: {
-          amount: accu.consumption.amount + curr.consumption,
-          price: accu.consumption.price + p.consumption * curr.consumption,
-        },
-        injection: {
-          amount: accu.injection.amount + curr.injection,
-          price: accu.injection.price + p.injection * curr.injection,
-        },
-        other: {
-          amount: accu.other.amount + curr.consumption,
-          price: accu.other.price + otherTotalUP * curr.consumption,
-        },
-      } as CostDetail
-    }, costStarter(otherTotalUP))
-    if (pError) {
-      logFn(`some prices were missing during cost calculation`)
-    }
-    //TODO klasse maken van CostCalc met methode voor toevoegen
-    totals.consumption.unitPrice = totals.consumption.price / totals.consumption.amount
-    totals.injection.unitPrice = totals.injection.price / totals.injection.amount
-    return totals
+      accu.add(
+        curr.consumption,
+        curr.injection,
+        p.consumption ?? 0,
+        p.injection ?? 0,
+        p.otherTotal ?? 0,
+      )
+      return accu
+    }, starter)
+    sum.other.unitPrice = first(pData)?.otherTotal ?? 0
+    return sum.round()
   }
 }
