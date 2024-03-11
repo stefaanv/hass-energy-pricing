@@ -16,12 +16,8 @@ export class MeteringResume extends Period {
   /** amount of gas used in kWh */
   gas = 0
 
-  /** monthly peak was exceeded during this quarter */
-  monthPeakExceeding = false
-  /** metering snapshot at the at of the quarter */
-  public readonly startQuarterValues: MeterValues
-
   private _lastExceededReport?: Date
+  private _startQuarterValues: MeterValues
 
   constructor(
     /** metering snapshot at the at of the quarter */
@@ -34,9 +30,9 @@ export class MeteringResume extends Period {
     public monthPeakTime: Date,
   ) {
     super()
-    this.startQuarterValues = new MeterValues(startQuarterValues)
+    this._startQuarterValues = new MeterValues(startQuarterValues)
     this.tariff = tariff
-    this.from = this.startQuarterValues.timestamp
+    this.from = this._startQuarterValues.timestamp
     this.till = addMinutes(this.from, 15)
     this.monthPeakValue
   }
@@ -47,24 +43,19 @@ export class MeteringResume extends Period {
     return result
   }
 
-  quarterStart() {
-    this.monthPeakExceeding = false
-  }
-
   update(current: MeterValues, logFn: (msg: string) => void) {
-    const sqv = this.startQuarterValues
-    this.consumption = Math.max(0, current.consTotal - this.startQuarterValues.consTotal)
-    this.injection = Math.max(0, current.injTotal - this.startQuarterValues.injTotal)
-    let batCharge = current.batCharge - this.startQuarterValues.batCharge
-    let batDischarge = current.batDischarge - this.startQuarterValues.batDischarge
+    const sqv = this._startQuarterValues
+    this.consumption = Math.max(0, current.consTotal - this._startQuarterValues.consTotal)
+    this.injection = Math.max(0, current.injTotal - this._startQuarterValues.injTotal)
+    let batCharge = current.batCharge - this._startQuarterValues.batCharge
+    let batDischarge = current.batDischarge - this._startQuarterValues.batDischarge
     if (isNaN(batCharge)) batCharge = 0
     if (isNaN(batDischarge)) batDischarge = 0
     this.batCharge = batCharge
     this.batDischarge = batDischarge
-    this.gas = current.gas - this.startQuarterValues.gas
+    this.gas = current.gas - this._startQuarterValues.gas
     this.till = current.timestamp
     if (this.consumption > this.monthPeakValue) {
-      this.monthPeakExceeding = true
       if (
         !this._lastExceededReport ||
         differenceInSeconds(new Date(), this._lastExceededReport) > 60
@@ -89,6 +80,6 @@ export class MeteringResume extends Period {
       'tariff',
       'monthPeakValue',
       'monthPeakTime',
-    ]) as Omit<MeteringResume, 'toEntity' | 'startQuarterValues' | 'monthPeakExceeding'>
+    ]) as Omit<MeteringResume, 'toEntity'>
   }
 }

@@ -1,9 +1,7 @@
 import { EntitySchema } from '@mikro-orm/mariadb'
 import { MeteringResume } from './metering-resume.model'
 
-export const MeteringResumeEntity = new EntitySchema<
-  Omit<MeteringResume, 'toEntity' | 'startQuarterValues' | 'monthPeakExceeding'>
->({
+export const MeteringResumeEntity = new EntitySchema<Omit<MeteringResume, 'toEntity'>>({
   name: 'metering',
 
   properties: {
