@@ -164,7 +164,10 @@ export class MeteringService {
     const charge = printSingle(resume.batCharge, 'batCh')
     const disCharge = printSingle(resume.batDischarge, 'batDis')
 
-    this._log.log(header + [consumption, injection, charge, disCharge, prices?.tariff].join(', '))
+    this._log.log(
+      header +
+        [consumption, injection, charge, disCharge, prices?.tariff].filter(s => s != '').join(', '),
+    )
   }
 }
 

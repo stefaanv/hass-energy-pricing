@@ -80,6 +80,6 @@ export class MeteringResume extends Period {
       'tariff',
       'monthPeakValue',
       'monthPeakTime',
-    ]) as Omit<MeteringResume, 'toEntity'>
+    ]) as MeteringResume
   }
 }
